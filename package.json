@@ -1,9 +1,9 @@
 {
-  "name": "@tagoKoder/bff-openapi",
+  "name": "@tagokoder/bff-openapi",
   "version": "0.0.1",
-  "description": "OpenAPI contract for BFF",
+  "description": "OpenAPI contract for the bank BFF",
   "files": ["openapi/bff.openapi.yaml"],
-  "main": "openapi/bff.openapi.yaml",
-  "license": "UNLICENSED",
-  "private": false
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
 }
