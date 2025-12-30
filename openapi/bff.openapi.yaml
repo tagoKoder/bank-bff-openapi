@@ -1,0 +1,433 @@
+openapi: 3.0.3
+info:
+  title: BFF API (Web)
+  version: 1.0.0
+  description: |
+    Backend For Frontend. Orquesta llamadas gRPC a microservicios y publica eventos async (audit/notifications).
+servers:
+  - url: http://localhost:8080
+    description: Local
+
+tags:
+  - name: Onboarding
+  - name: Session
+  - name: Accounts
+  - name: Payments
+  - name: Sandbox
+  - name: Profile
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+      required: [code, message]
+
+    OnboardingIntentsRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        phone: { type: string }
+        channel: { type: string, example: web }
+        locale: { type: string, example: es-EC }
+      required: [email, phone, channel]
+
+    OnboardingIntentsResponse:
+      type: object
+      properties:
+        registration_id: { type: string, format: uuid }
+        otp_channel_hint: { type: string, enum: [email, sms] }
+      required: [registration_id, otp_channel_hint]
+
+    VerifyContactRequest:
+      type: object
+      properties:
+        registration_id: { type: string, format: uuid }
+        otp: { type: string }
+      required: [registration_id, otp]
+
+    StatusResponse:
+      type: object
+      properties:
+        status: { type: string }
+      required: [status]
+
+    ActivateRequest:
+      type: object
+      properties:
+        registration_id: { type: string, format: uuid }
+        full_name: { type: string }
+        tin: { type: string }
+        birth_date: { type: string, example: "1998-12-31" }
+        country: { type: string, example: EC }
+        email: { type: string, format: email }
+        phone: { type: string }
+      required: [registration_id, full_name, tin, birth_date, country, email, phone]
+
+    ActivateResponse:
+      type: object
+      properties:
+        customer_id: { type: string, format: uuid }
+        account_id: { type: string, format: uuid }
+      required: [customer_id, account_id]
+
+    WhoamiResponse:
+      type: object
+      properties:
+        subject_id_oidc: { type: string }
+        customer_id: { type: string, nullable: true }
+        user_status: { type: string, enum: [ACTIVE, LOCKED, DISABLED] }
+      required: [subject_id_oidc, user_status]
+
+    AccountsOverviewResponse:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              product_type: { type: string, example: checking }
+              currency: { type: string, example: USD }
+              status: { type: string, example: active }
+              balances:
+                type: object
+                properties:
+                  ledger: { type: string, example: "100.00" }
+                  available: { type: string, example: "95.00" }
+                  hold: { type: string, example: "5.00" }
+                required: [ledger, available, hold]
+            required: [id, product_type, currency, balances]
+      required: [accounts]
+
+    AccountActivityResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              journal_id: { type: string, format: uuid }
+              booked_at: { type: string, format: date-time }
+              memo: { type: string, nullable: true }
+            required: [journal_id, booked_at]
+        page: { type: integer, example: 1 }
+        size: { type: integer, example: 50 }
+        total: { type: integer, example: 123 }
+      required: [items, page, size, total]
+
+    CreateBeneficiaryRequest:
+      type: object
+      properties:
+        nickname: { type: string }
+        destination_account: { type: string, format: uuid }
+      required: [nickname, destination_account]
+
+    CreateBeneficiaryResponse:
+      type: object
+      properties:
+        beneficiary_id: { type: string, format: uuid }
+      required: [beneficiary_id]
+
+    CreatePaymentRequest:
+      type: object
+      properties:
+        source_account: { type: string, format: uuid }
+        destination_account: { type: string, format: uuid }
+        amount: { type: string, example: "10.50" }
+        currency: { type: string, example: USD }
+        memo: { type: string }
+      required: [source_account, destination_account, amount, currency]
+
+    CreatePaymentResponse:
+      type: object
+      properties:
+        payment_id: { type: string, format: uuid }
+        status: { type: string, enum: [processing, posted] }
+      required: [payment_id, status]
+
+    TopupRequest:
+      type: object
+      properties:
+        account_id: { type: string, format: uuid }
+        amount: { type: string, example: "100.00" }
+        currency: { type: string, example: USD }
+        memo: { type: string }
+      required: [account_id, amount, currency]
+
+    TopupResponse:
+      type: object
+      properties:
+        journal_id: { type: string, format: uuid }
+        status: { type: string, enum: [posted] }
+      required: [journal_id, status]
+
+    PatchProfileRequest:
+      type: object
+      properties:
+        full_name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        preferences:
+          type: array
+          items:
+            type: object
+            properties:
+              channel: { type: string, enum: [email, sms, push] }
+              opt_in: { type: boolean }
+            required: [channel, opt_in]
+
+    PatchProfileResponse:
+      type: object
+      properties:
+        updated: { type: boolean }
+      required: [updated]
+
+paths:
+  /bff/onboarding/intents:
+    post:
+      tags: [Onboarding]
+      summary: Inicia alta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OnboardingIntentsRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnboardingIntentsResponse' }
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /bff/onboarding/verify-contact:
+    post:
+      tags: [Onboarding]
+      summary: Verifica OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyContactRequest' }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatusResponse' }
+
+  /bff/onboarding/consents:
+    post:
+      tags: [Onboarding]
+      summary: Registra consents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                registration_id: { type: string, format: uuid }
+                consents:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      purpose_code: { type: string }
+                      granted: { type: boolean }
+                    required: [purpose_code, granted]
+                evidence:
+                  type: object
+                  properties:
+                    ip: { type: string }
+                    ua: { type: string }
+              required: [registration_id, consents]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatusResponse' }
+
+  /bff/onboarding/activate:
+    post:
+      tags: [Onboarding]
+      summary: Crea customer y account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActivateRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActivateResponse' }
+
+  /bff/session/whoami:
+    get:
+      tags: [Session]
+      security: [{ bearerAuth: [] }]
+      summary: Devuelve usuario autenticado
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhoamiResponse' }
+        "401":
+          description: Unauthorized
+
+  /bff/accounts/overview:
+    get:
+      tags: [Accounts]
+      security: [{ bearerAuth: [] }]
+      summary: Lista cuentas con balances
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountsOverviewResponse' }
+
+  /bff/accounts/{id}/activity:
+    get:
+      tags: [Accounts]
+      security: [{ bearerAuth: [] }]
+      summary: Historial paginado
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountActivityResponse' }
+
+  /bff/beneficiaries:
+    post:
+      tags: [Payments]
+      security: [{ bearerAuth: [] }]
+      summary: Crea beneficiario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBeneficiaryRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateBeneficiaryResponse' }
+
+  /bff/payments:
+    post:
+      tags: [Payments]
+      security: [{ bearerAuth: [] }]
+      summary: Crea pago (idempotente)
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePaymentRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatePaymentResponse' }
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatePaymentResponse' }
+
+  /bff/payments/{id}:
+    get:
+      tags: [Payments]
+      security: [{ bearerAuth: [] }]
+      summary: Obtiene pago
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+
+  /bff/sandbox/topup:
+    post:
+      tags: [Sandbox]
+      security: [{ bearerAuth: [] }]
+      summary: Topup demo (admin)
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TopupRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopupResponse' }
+
+  /bff/profile:
+    patch:
+      tags: [Profile]
+      security: [{ bearerAuth: [] }]
+      summary: Actualiza perfil (parcial)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchProfileRequest' }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatchProfileResponse' }

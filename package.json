@@ -1,0 +1,9 @@
+{
+  "name": "@tagoKoder/bff-openapi",
+  "version": "0.0.1",
+  "description": "OpenAPI contract for BFF",
+  "files": ["openapi/bff.openapi.yaml"],
+  "main": "openapi/bff.openapi.yaml",
+  "license": "UNLICENSED",
+  "private": false
+}
