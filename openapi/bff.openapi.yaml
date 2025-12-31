@@ -18,10 +18,10 @@ tags:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: __Host-bff_sid
 
   schemas:
     ErrorResponse:
@@ -193,10 +193,14 @@ components:
         updated: { type: boolean }
       required: [updated]
 
+security:
+  - cookieAuth: []
+
 paths:
   /bff/onboarding/intents:
     post:
       tags: [Onboarding]
+      security: []   # público
       summary: Inicia alta
       requestBody:
         required: true
@@ -218,6 +222,7 @@ paths:
   /bff/onboarding/verify-contact:
     post:
       tags: [Onboarding]
+      security: []   # público
       summary: Verifica OTP
       requestBody:
         required: true
@@ -234,6 +239,7 @@ paths:
   /bff/onboarding/consents:
     post:
       tags: [Onboarding]
+      security: []   # público
       summary: Registra consents
       requestBody:
         required: true
@@ -267,6 +273,7 @@ paths:
   /bff/onboarding/activate:
     post:
       tags: [Onboarding]
+      security: []   # público
       summary: Crea customer y account
       requestBody:
         required: true
@@ -283,7 +290,7 @@ paths:
   /bff/session/whoami:
     get:
       tags: [Session]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Devuelve usuario autenticado
       responses:
         "200":
@@ -297,7 +304,7 @@ paths:
   /bff/accounts/overview:
     get:
       tags: [Accounts]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Lista cuentas con balances
       responses:
         "200":
@@ -309,7 +316,7 @@ paths:
   /bff/accounts/{id}/activity:
     get:
       tags: [Accounts]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Historial paginado
       parameters:
         - in: path
@@ -338,7 +345,7 @@ paths:
   /bff/beneficiaries:
     post:
       tags: [Payments]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Crea beneficiario
       requestBody:
         required: true
@@ -355,7 +362,7 @@ paths:
   /bff/payments:
     post:
       tags: [Payments]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Crea pago (idempotente)
       parameters:
         - in: header
@@ -382,7 +389,7 @@ paths:
   /bff/payments/{id}:
     get:
       tags: [Payments]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Obtiene pago
       parameters:
         - in: path
@@ -396,7 +403,7 @@ paths:
   /bff/sandbox/topup:
     post:
       tags: [Sandbox]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Topup demo (admin)
       parameters:
         - in: header
@@ -418,7 +425,7 @@ paths:
   /bff/profile:
     patch:
       tags: [Profile]
-      security: [{ bearerAuth: [] }]
+      security: [{ cookieAuth: [] }]
       summary: Actualiza perfil (parcial)
       requestBody:
         required: true
