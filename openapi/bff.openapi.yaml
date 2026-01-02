@@ -3,355 +3,52 @@ info:
   title: BFF Web API
   version: 1.0.0
   description: |
-    BFF para banca web. Autenticación por cookie de sesión (OIDC via Identity).
+    API del BFF para canal web (cookie session + CSRF).
 servers:
   - url: http://localhost:8080
+    description: Local
 
 tags:
+  - name: Auth
   - name: Session
-  - name: Accounts
   - name: Onboarding
+  - name: Accounts
   - name: Payments
   - name: Profile
-  - name: Sandbox
-
-paths:
-  /bff/session/whoami:
-    get:
-      tags: [Session]
-      operationId: getCurrentSession
-      summary: Identidad y estado de la sesión actual
-      security:
-        - cookieAuth: []
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/WhoamiResponse" }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-
-  /bff/accounts/overview:
-    get:
-      tags: [Accounts]
-      operationId: getAccountsOverview
-      summary: Resumen de cuentas del customer autenticado
-      security:
-        - cookieAuth: []
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AccountsOverviewResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-
-  /bff/accounts/{id}/activity:
-    get:
-      tags: [Accounts]
-      operationId: getAccountActivity
-      summary: Actividad (journal entries) de una cuenta
-      security:
-        - cookieAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-        - name: page
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, default: 1 }
-        - name: size
-          in: query
-          required: false
-          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AccountActivityResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-
-  /bff/onboarding/intents:
-    post:
-      tags: [Onboarding]
-      operationId: startOnboarding
-      summary: Inicia onboarding (registro/KYC)
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/OnboardingIntentRequest" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OnboardingIntentResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-
-  /bff/onboarding/verify-contact:
-    post:
-      tags: [Onboarding]
-      operationId: verifyOnboardingContact
-      summary: Verifica OTP/contacto (stub por ahora)
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/VerifyContactRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SimpleStatusResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-
-  /bff/onboarding/consents:
-    post:
-      tags: [Onboarding]
-      operationId: registerOnboardingConsents
-      summary: Registra consentimientos (stub por ahora)
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ConsentsRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SimpleStatusResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-
-  /bff/onboarding/activate:
-    post:
-      tags: [Onboarding]
-      operationId: activateOnboarding
-      summary: Activa onboarding (crea customer + account)
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ActivateRequest" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ActivateResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-
-  /bff/beneficiaries:
-    post:
-      tags: [Payments]
-      operationId: createBeneficiary
-      summary: Crea beneficiario (MVP)
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - $ref: "#/components/parameters/CsrfHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CreateBeneficiaryRequest" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/CreateBeneficiaryResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-
-  /bff/payments:
-    post:
-      tags: [Payments]
-      operationId: executePayment
-      summary: Ejecuta un pago
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/CsrfHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/CreatePaymentResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-
-  /bff/payments/{id}:
-    get:
-      tags: [Payments]
-      operationId: getPaymentStatus
-      summary: Obtiene estado/detalle de un pago
-      security:
-        - cookieAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/GetPaymentResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-
-  /bff/profile:
-    patch:
-      tags: [Profile]
-      operationId: updateProfile
-      summary: Actualiza perfil del customer autenticado
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - $ref: "#/components/parameters/CsrfHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/PatchProfileRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/PatchProfileResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-
-  /bff/sandbox/topup:
-    post:
-      tags: [Sandbox]
-      operationId: sandboxTopup
-      summary: Top-up admin (sandbox)
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
-        - $ref: "#/components/parameters/CsrfHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SandboxTopupRequest" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SandboxTopupResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "502": { $ref: "#/components/responses/BadGateway" }
+  - name: Admin
 
 components:
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
-      name: bff_session
+      name: sid
     csrfAuth:
       type: apiKey
       in: header
       name: X-CSRF-Token
 
-  parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
+  headers:
+    Idempotency-Key:
+      schema:
+        type: string
       required: true
-      schema: { type: string, minLength: 8, maxLength: 128 }
-    CsrfHeader:
-      name: X-CSRF-Token
-      in: header
-      required: true
-      schema: { type: string, minLength: 8, maxLength: 256 }
-
-  responses:
-    BadRequest:
-      description: Bad Request
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/ErrorResponse" }
-    Unauthorized:
-      description: Unauthorized
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/ErrorResponse" }
-    Forbidden:
-      description: Forbidden
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/ErrorResponse" }
-    BadGateway:
-      description: Bad Gateway
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
     ErrorResponse:
       type: object
       required: [code, message]
       properties:
-        code: { type: string, example: bad_request }
-        message: { type: string, example: invalid input }
+        code:
+          type: string
+          example: "BAD_REQUEST"
+        message:
+          type: string
+          example: "Invalid request"
         details:
           type: object
           additionalProperties: true
-
-    WhoamiResponse:
-      type: object
-      required: [subject_id_oidc, user_status, roles]
-      properties:
-        subject_id_oidc: { type: string }
-        customer_id: { type: string, nullable: true }
-        user_status: { type: string, example: ACTIVE }
-        roles:
-          type: array
-          items: { type: string }
+          nullable: true
 
     AccountsOverviewResponse:
       type: object
@@ -359,26 +56,34 @@ components:
       properties:
         accounts:
           type: array
-          items: { $ref: "#/components/schemas/AccountItem" }
+          items:
+            $ref: '#/components/schemas/AccountItem'
 
     AccountItem:
       type: object
       required: [id, product_type, currency, status, balances]
       properties:
-        id: { type: string }
-        product_type: { type: string }
-        currency: { type: string, example: USD }
-        status: { type: string }
+        id:
+          type: string
+        product_type:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
         balances:
-          $ref: "#/components/schemas/AccountBalances"
+          $ref: '#/components/schemas/AccountBalances'
 
     AccountBalances:
       type: object
       required: [ledger, available, hold]
       properties:
-        ledger: { type: string, example: "100.00" }
-        available: { type: string, example: "90.00" }
-        hold: { type: string, example: "10.00" }
+        ledger:
+          type: string
+        available:
+          type: string
+        hold:
+          type: string
 
     AccountActivityResponse:
       type: object
@@ -386,165 +91,710 @@ components:
       properties:
         items:
           type: array
-          items: { $ref: "#/components/schemas/AccountActivityItem" }
-        page: { type: integer }
-        size: { type: integer }
-        total: { type: integer }
+          items:
+            $ref: '#/components/schemas/AccountActivityItem'
+        page:
+          type: integer
+        size:
+          type: integer
+        total:
+          type: integer
 
     AccountActivityItem:
       type: object
       required: [journal_id, booked_at]
       properties:
-        journal_id: { type: string }
-        booked_at: { type: string, format: date-time }
-        memo: { type: string, nullable: true }
+        journal_id:
+          type: string
+        booked_at:
+          type: string
+          format: date-time
+        memo:
+          type: string
+          nullable: true
 
     OnboardingIntentRequest:
       type: object
       required: [email, phone]
       properties:
-        email: { type: string }
-        phone: { type: string }
-        channel: { type: string, default: web }
-        locale: { type: string, default: es-EC }
+        email:
+          type: string
+        phone:
+          type: string
+        channel:
+          type: string
+          nullable: true
+        locale:
+          type: string
+          nullable: true
 
     OnboardingIntentResponse:
       type: object
       required: [registration_id, otp_channel_hint]
       properties:
-        registration_id: { type: string }
-        otp_channel_hint: { type: string, example: email }
+        registration_id:
+          type: string
+        otp_channel_hint:
+          type: string
 
     VerifyContactRequest:
       type: object
       required: [registration_id, otp]
       properties:
-        registration_id: { type: string }
-        otp: { type: string }
+        registration_id:
+          type: string
+        otp:
+          type: string
 
     ConsentsRequest:
       type: object
       required: [registration_id, accepted]
       properties:
-        registration_id: { type: string }
-        accepted: { type: boolean }
+        registration_id:
+          type: string
+        accepted:
+          type: boolean
 
     ActivateRequest:
       type: object
       required: [registration_id, full_name, tin, birth_date, country, email, phone]
       properties:
-        registration_id: { type: string }
-        full_name: { type: string }
-        tin: { type: string }
-        birth_date: { type: string, example: "1999-12-31" }
-        country: { type: string, example: EC }
-        email: { type: string }
-        phone: { type: string }
+        registration_id:
+          type: string
+        full_name:
+          type: string
+        tin:
+          type: string
+        birth_date:
+          type: string
+        country:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
 
     ActivateResponse:
       type: object
       required: [customer_id, account_id, activation_ref]
       properties:
-        customer_id: { type: string }
-        account_id: { type: string }
-        activation_ref: { type: string }
-
-    SimpleStatusResponse:
-      type: object
-      required: [status]
-      properties:
-        status: { type: string, example: ok }
+        customer_id:
+          type: string
+        account_id:
+          type: string
+        activation_ref:
+          type: string
 
     CreateBeneficiaryRequest:
       type: object
       required: [destination_account]
       properties:
-        destination_account: { type: string }
-        alias: { type: string }
+        destination_account:
+          type: string
+        alias:
+          type: string
+          nullable: true
 
     CreateBeneficiaryResponse:
       type: object
       required: [beneficiary_id]
       properties:
-        beneficiary_id: { type: string }
+        beneficiary_id:
+          type: string
 
     CreatePaymentRequest:
       type: object
       required: [source_account, destination_account, currency, amount]
       properties:
-        source_account: { type: string }
-        destination_account: { type: string }
-        currency: { type: string, example: USD }
-        amount: { type: string, example: "10.50" }
-        memo: { type: string }
+        source_account:
+          type: string
+        destination_account:
+          type: string
+        currency:
+          type: string
+        amount:
+          type: string
+        memo:
+          type: string
+          nullable: true
 
     CreatePaymentResponse:
       type: object
       required: [payment_id, status]
       properties:
-        payment_id: { type: string }
+        payment_id:
+          type: string
         status:
           type: string
-          enum: [posted, pending, rejected, failed]
-
-    GetPaymentResponse:
-      type: object
-      required: [payment_id, status, idempotency_key, source_account, destination_account, currency, amount, steps, created_at]
-      properties:
-        payment_id: { type: string }
-        status: { type: string }
-        idempotency_key: { type: string }
-        source_account: { type: string }
-        destination_account: { type: string }
-        currency: { type: string }
-        amount: { type: string }
-        created_at: { type: string, format: date-time }
-        steps:
-          type: array
-          items: { $ref: "#/components/schemas/PaymentStep" }
+          enum: [pending, posted, rejected, failed]
 
     PaymentStep:
       type: object
       required: [step, state, attempted_at]
       properties:
-        step: { type: string }
-        state: { type: string }
-        details_json: { type: string }
-        attempted_at: { type: string, format: date-time }
+        step:
+          type: string
+        state:
+          type: string
+        details_json:
+          type: string
+          nullable: true
+        attempted_at:
+          type: string
+          format: date-time
+
+    GetPaymentResponse:
+      type: object
+      required: [payment_id, status, idempotency_key, source_account, destination_account, currency, amount, steps, created_at]
+      properties:
+        payment_id:
+          type: string
+        status:
+          type: string
+        idempotency_key:
+          type: string
+        source_account:
+          type: string
+        destination_account:
+          type: string
+        currency:
+          type: string
+        amount:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentStep'
+        created_at:
+          type: string
+          format: date-time
 
     PatchProfileRequest:
       type: object
       properties:
-        full_name: { type: string, nullable: true }
-        email: { type: string, nullable: true }
-        phone: { type: string, nullable: true }
+        full_name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
         preferences:
           type: array
+          nullable: true
           items:
             type: object
             required: [channel, opt_in]
             properties:
-              channel: { type: string, enum: [email, sms, push] }
-              opt_in: { type: boolean }
+              channel:
+                type: string
+                enum: [email, sms, push]
+              opt_in:
+                type: boolean
 
     PatchProfileResponse:
       type: object
       required: [updated]
       properties:
-        updated: { type: boolean }
+        updated:
+          type: boolean
 
     SandboxTopupRequest:
       type: object
-      required: [account_id, amount, currency]
+      required: [account_id, currency, amount]
       properties:
-        account_id: { type: string }
-        amount: { type: string }
-        currency: { type: string }
-        memo: { type: string }
+        account_id:
+          type: string
+        currency:
+          type: string
+        amount:
+          type: string
+        memo:
+          type: string
+          nullable: true
 
     SandboxTopupResponse:
       type: object
       required: [journal_id, status]
       properties:
-        journal_id: { type: string }
-        status: { type: string }
+        journal_id:
+          type: string
+        status:
+          type: string
+
+    WhoamiResponse:
+      type: object
+      required: [subject_id_oidc, roles, user_status]
+      properties:
+        subject_id_oidc:
+          type: string
+        customer_id:
+          type: string
+          nullable: true
+        roles:
+          type: array
+          items:
+            type: string
+        user_status:
+          type: string
+
+    SimpleStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
+paths:
+  /api/v1/accounts:
+    get:
+      tags: [Accounts]
+      operationId: getAccountsOverview
+      summary: Resumen de cuentas del customer autenticado
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountsOverviewResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/accounts/{id}/activity:
+    get:
+      tags: [Accounts]
+      operationId: getAccountActivity
+      summary: Actividad (journal entries) de una cuenta
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: page
+          required: false
+          schema: { type: integer }
+        - in: query
+          name: size
+          required: false
+          schema: { type: integer }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountActivityResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/onboarding/intents:
+    post:
+      tags: [Onboarding]
+      operationId: startOnboarding
+      summary: Inicia onboarding (registro/KYC)
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OnboardingIntentResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OnboardingIntentRequest' }
+
+  /api/v1/onboarding/verify-contact:
+    post:
+      tags: [Onboarding]
+      operationId: verifyOnboardingContact
+      summary: Verifica OTP/contacto (stub por ahora)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimpleStatusResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyContactRequest' }
+
+  /api/v1/onboarding/consents:
+    post:
+      tags: [Onboarding]
+      operationId: registerOnboardingConsents
+      summary: Registra consentimientos (stub por ahora)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SimpleStatusResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConsentsRequest' }
+
+  /api/v1/onboarding/activate:
+    post:
+      tags: [Onboarding]
+      operationId: activateOnboarding
+      summary: Activa onboarding (crea customer + account)
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActivateResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ActivateRequest' }
+
+  /api/v1/beneficiaries:
+    post:
+      tags: [Payments]
+      operationId: createBeneficiary
+      summary: Crea beneficiario (MVP)
+      security:
+        - cookieAuth: []
+        - csrfAuth: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateBeneficiaryResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBeneficiaryRequest' }
+
+  /api/v1/payments:
+    post:
+      tags: [Payments]
+      operationId: executePayment
+      summary: Ejecuta un pago
+      security:
+        - cookieAuth: []
+        - csrfAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatePaymentResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePaymentRequest' }
+
+  /api/v1/payments/{id}:
+    get:
+      tags: [Payments]
+      operationId: getPaymentStatus
+      summary: Obtiene estado/detalle de un pago
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GetPaymentResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/profile:
+    patch:
+      tags: [Profile]
+      operationId: updateProfile
+      summary: Actualiza perfil del customer autenticado
+      security:
+        - cookieAuth: []
+        - csrfAuth: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatchProfileResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchProfileRequest' }
+
+  /api/v1/admin/sandbox/topups:
+    post:
+      tags: [Admin]
+      operationId: sandboxTopup
+      summary: Top-up admin (sandbox)
+      security:
+        - cookieAuth: []
+        - csrfAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SandboxTopupResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: Schema validation failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SandboxTopupRequest' }
+
+  /api/v1/session:
+    get:
+      tags: [Session]
+      operationId: getCurrentSession
+      summary: Identidad y estado de la sesión actual
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhoamiResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
