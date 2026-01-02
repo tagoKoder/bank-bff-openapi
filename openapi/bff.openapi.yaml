@@ -1,440 +1,550 @@
 openapi: 3.0.3
 info:
-  title: BFF API (Web)
+  title: BFF Web API
   version: 1.0.0
   description: |
-    Backend For Frontend. Orquesta llamadas gRPC a microservicios y publica eventos async (audit/notifications).
+    BFF para banca web. Autenticación por cookie de sesión (OIDC via Identity).
 servers:
   - url: http://localhost:8080
-    description: Local
 
 tags:
-  - name: Onboarding
   - name: Session
   - name: Accounts
+  - name: Onboarding
   - name: Payments
-  - name: Sandbox
   - name: Profile
+  - name: Sandbox
+
+paths:
+  /bff/session/whoami:
+    get:
+      tags: [Session]
+      operationId: getCurrentSession
+      summary: Identidad y estado de la sesión actual
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WhoamiResponse" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /bff/accounts/overview:
+    get:
+      tags: [Accounts]
+      operationId: getAccountsOverview
+      summary: Resumen de cuentas del customer autenticado
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountsOverviewResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /bff/accounts/{id}/activity:
+    get:
+      tags: [Accounts]
+      operationId: getAccountActivity
+      summary: Actividad (journal entries) de una cuenta
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountActivityResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /bff/onboarding/intents:
+    post:
+      tags: [Onboarding]
+      operationId: startOnboarding
+      summary: Inicia onboarding (registro/KYC)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnboardingIntentRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnboardingIntentResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /bff/onboarding/verify-contact:
+    post:
+      tags: [Onboarding]
+      operationId: verifyOnboardingContact
+      summary: Verifica OTP/contacto (stub por ahora)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VerifyContactRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimpleStatusResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /bff/onboarding/consents:
+    post:
+      tags: [Onboarding]
+      operationId: registerOnboardingConsents
+      summary: Registra consentimientos (stub por ahora)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConsentsRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimpleStatusResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /bff/onboarding/activate:
+    post:
+      tags: [Onboarding]
+      operationId: activateOnboarding
+      summary: Activa onboarding (crea customer + account)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActivateRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivateResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /bff/beneficiaries:
+    post:
+      tags: [Payments]
+      operationId: createBeneficiary
+      summary: Crea beneficiario (MVP)
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBeneficiaryRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateBeneficiaryResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /bff/payments:
+    post:
+      tags: [Payments]
+      operationId: executePayment
+      summary: Ejecuta un pago
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePaymentRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreatePaymentResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /bff/payments/{id}:
+    get:
+      tags: [Payments]
+      operationId: getPaymentStatus
+      summary: Obtiene estado/detalle de un pago
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GetPaymentResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /bff/profile:
+    patch:
+      tags: [Profile]
+      operationId: updateProfile
+      summary: Actualiza perfil del customer autenticado
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PatchProfileRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PatchProfileResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /bff/sandbox/topup:
+    post:
+      tags: [Sandbox]
+      operationId: sandboxTopup
+      summary: Top-up admin (sandbox)
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxTopupRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SandboxTopupResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
 
 components:
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
-      name: __Host-bff_sid
+      name: bff_session
+    csrfAuth:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    CsrfHeader:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 256 }
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    BadGateway:
+      description: Bad Gateway
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
     ErrorResponse:
       type: object
-      properties:
-        code: { type: string }
-        message: { type: string }
       required: [code, message]
-
-    OnboardingIntentsRequest:
-      type: object
       properties:
-        email: { type: string, format: email }
-        phone: { type: string }
-        channel: { type: string, example: web }
-        locale: { type: string, example: es-EC }
-      required: [email, phone, channel]
-
-    OnboardingIntentsResponse:
-      type: object
-      properties:
-        registration_id: { type: string, format: uuid }
-        otp_channel_hint: { type: string, enum: [email, sms] }
-      required: [registration_id, otp_channel_hint]
-
-    VerifyContactRequest:
-      type: object
-      properties:
-        registration_id: { type: string, format: uuid }
-        otp: { type: string }
-      required: [registration_id, otp]
-
-    StatusResponse:
-      type: object
-      properties:
-        status: { type: string }
-      required: [status]
-
-    ActivateRequest:
-      type: object
-      properties:
-        registration_id: { type: string, format: uuid }
-        full_name: { type: string }
-        tin: { type: string }
-        birth_date: { type: string, example: "1998-12-31" }
-        country: { type: string, example: EC }
-        email: { type: string, format: email }
-        phone: { type: string }
-      required: [registration_id, full_name, tin, birth_date, country, email, phone]
-
-    ActivateResponse:
-      type: object
-      properties:
-        customer_id: { type: string, format: uuid }
-        account_id: { type: string, format: uuid }
-      required: [customer_id, account_id]
+        code: { type: string, example: bad_request }
+        message: { type: string, example: invalid input }
+        details:
+          type: object
+          additionalProperties: true
 
     WhoamiResponse:
       type: object
+      required: [subject_id_oidc, user_status, roles]
       properties:
         subject_id_oidc: { type: string }
         customer_id: { type: string, nullable: true }
-        user_status: { type: string, enum: [ACTIVE, LOCKED, DISABLED] }
-      required: [subject_id_oidc, user_status]
+        user_status: { type: string, example: ACTIVE }
+        roles:
+          type: array
+          items: { type: string }
 
     AccountsOverviewResponse:
       type: object
+      required: [accounts]
       properties:
         accounts:
           type: array
-          items:
-            type: object
-            properties:
-              id: { type: string, format: uuid }
-              product_type: { type: string, example: checking }
-              currency: { type: string, example: USD }
-              status: { type: string, example: active }
-              balances:
-                type: object
-                properties:
-                  ledger: { type: string, example: "100.00" }
-                  available: { type: string, example: "95.00" }
-                  hold: { type: string, example: "5.00" }
-                required: [ledger, available, hold]
-            required: [id, product_type, currency, balances]
-      required: [accounts]
+          items: { $ref: "#/components/schemas/AccountItem" }
+
+    AccountItem:
+      type: object
+      required: [id, product_type, currency, status, balances]
+      properties:
+        id: { type: string }
+        product_type: { type: string }
+        currency: { type: string, example: USD }
+        status: { type: string }
+        balances:
+          $ref: "#/components/schemas/AccountBalances"
+
+    AccountBalances:
+      type: object
+      required: [ledger, available, hold]
+      properties:
+        ledger: { type: string, example: "100.00" }
+        available: { type: string, example: "90.00" }
+        hold: { type: string, example: "10.00" }
 
     AccountActivityResponse:
       type: object
+      required: [items, page, size, total]
       properties:
         items:
           type: array
-          items:
-            type: object
-            properties:
-              journal_id: { type: string, format: uuid }
-              booked_at: { type: string, format: date-time }
-              memo: { type: string, nullable: true }
-            required: [journal_id, booked_at]
-        page: { type: integer, example: 1 }
-        size: { type: integer, example: 50 }
-        total: { type: integer, example: 123 }
-      required: [items, page, size, total]
+          items: { $ref: "#/components/schemas/AccountActivityItem" }
+        page: { type: integer }
+        size: { type: integer }
+        total: { type: integer }
+
+    AccountActivityItem:
+      type: object
+      required: [journal_id, booked_at]
+      properties:
+        journal_id: { type: string }
+        booked_at: { type: string, format: date-time }
+        memo: { type: string, nullable: true }
+
+    OnboardingIntentRequest:
+      type: object
+      required: [email, phone]
+      properties:
+        email: { type: string }
+        phone: { type: string }
+        channel: { type: string, default: web }
+        locale: { type: string, default: es-EC }
+
+    OnboardingIntentResponse:
+      type: object
+      required: [registration_id, otp_channel_hint]
+      properties:
+        registration_id: { type: string }
+        otp_channel_hint: { type: string, example: email }
+
+    VerifyContactRequest:
+      type: object
+      required: [registration_id, otp]
+      properties:
+        registration_id: { type: string }
+        otp: { type: string }
+
+    ConsentsRequest:
+      type: object
+      required: [registration_id, accepted]
+      properties:
+        registration_id: { type: string }
+        accepted: { type: boolean }
+
+    ActivateRequest:
+      type: object
+      required: [registration_id, full_name, tin, birth_date, country, email, phone]
+      properties:
+        registration_id: { type: string }
+        full_name: { type: string }
+        tin: { type: string }
+        birth_date: { type: string, example: "1999-12-31" }
+        country: { type: string, example: EC }
+        email: { type: string }
+        phone: { type: string }
+
+    ActivateResponse:
+      type: object
+      required: [customer_id, account_id, activation_ref]
+      properties:
+        customer_id: { type: string }
+        account_id: { type: string }
+        activation_ref: { type: string }
+
+    SimpleStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, example: ok }
 
     CreateBeneficiaryRequest:
       type: object
+      required: [destination_account]
       properties:
-        nickname: { type: string }
-        destination_account: { type: string, format: uuid }
-      required: [nickname, destination_account]
+        destination_account: { type: string }
+        alias: { type: string }
 
     CreateBeneficiaryResponse:
       type: object
-      properties:
-        beneficiary_id: { type: string, format: uuid }
       required: [beneficiary_id]
+      properties:
+        beneficiary_id: { type: string }
 
     CreatePaymentRequest:
       type: object
+      required: [source_account, destination_account, currency, amount]
       properties:
-        source_account: { type: string, format: uuid }
-        destination_account: { type: string, format: uuid }
-        amount: { type: string, example: "10.50" }
+        source_account: { type: string }
+        destination_account: { type: string }
         currency: { type: string, example: USD }
+        amount: { type: string, example: "10.50" }
         memo: { type: string }
-      required: [source_account, destination_account, amount, currency]
 
     CreatePaymentResponse:
       type: object
-      properties:
-        payment_id: { type: string, format: uuid }
-        status: { type: string, enum: [processing, posted] }
       required: [payment_id, status]
-
-    TopupRequest:
-      type: object
       properties:
-        account_id: { type: string, format: uuid }
-        amount: { type: string, example: "100.00" }
-        currency: { type: string, example: USD }
-        memo: { type: string }
-      required: [account_id, amount, currency]
+        payment_id: { type: string }
+        status:
+          type: string
+          enum: [posted, pending, rejected, failed]
 
-    TopupResponse:
+    GetPaymentResponse:
       type: object
+      required: [payment_id, status, idempotency_key, source_account, destination_account, currency, amount, steps, created_at]
       properties:
-        journal_id: { type: string, format: uuid }
-        status: { type: string, enum: [posted] }
-      required: [journal_id, status]
+        payment_id: { type: string }
+        status: { type: string }
+        idempotency_key: { type: string }
+        source_account: { type: string }
+        destination_account: { type: string }
+        currency: { type: string }
+        amount: { type: string }
+        created_at: { type: string, format: date-time }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentStep" }
+
+    PaymentStep:
+      type: object
+      required: [step, state, attempted_at]
+      properties:
+        step: { type: string }
+        state: { type: string }
+        details_json: { type: string }
+        attempted_at: { type: string, format: date-time }
 
     PatchProfileRequest:
       type: object
       properties:
-        full_name: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
+        full_name: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
         preferences:
           type: array
           items:
             type: object
+            required: [channel, opt_in]
             properties:
               channel: { type: string, enum: [email, sms, push] }
               opt_in: { type: boolean }
-            required: [channel, opt_in]
 
     PatchProfileResponse:
       type: object
+      required: [updated]
       properties:
         updated: { type: boolean }
-      required: [updated]
 
-security:
-  - cookieAuth: []
+    SandboxTopupRequest:
+      type: object
+      required: [account_id, amount, currency]
+      properties:
+        account_id: { type: string }
+        amount: { type: string }
+        currency: { type: string }
+        memo: { type: string }
 
-paths:
-  /bff/onboarding/intents:
-    post:
-      tags: [Onboarding]
-      security: []   # público
-      summary: Inicia alta
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OnboardingIntentsRequest' }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OnboardingIntentsResponse' }
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-
-  /bff/onboarding/verify-contact:
-    post:
-      tags: [Onboarding]
-      security: []   # público
-      summary: Verifica OTP
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/VerifyContactRequest' }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/StatusResponse' }
-
-  /bff/onboarding/consents:
-    post:
-      tags: [Onboarding]
-      security: []   # público
-      summary: Registra consents
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                registration_id: { type: string, format: uuid }
-                consents:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      purpose_code: { type: string }
-                      granted: { type: boolean }
-                    required: [purpose_code, granted]
-                evidence:
-                  type: object
-                  properties:
-                    ip: { type: string }
-                    ua: { type: string }
-              required: [registration_id, consents]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/StatusResponse' }
-
-  /bff/onboarding/activate:
-    post:
-      tags: [Onboarding]
-      security: []   # público
-      summary: Crea customer y account
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ActivateRequest' }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ActivateResponse' }
-
-  /bff/session/whoami:
-    get:
-      tags: [Session]
-      security: [{ cookieAuth: [] }]
-      summary: Devuelve usuario autenticado
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WhoamiResponse' }
-        "401":
-          description: Unauthorized
-
-  /bff/accounts/overview:
-    get:
-      tags: [Accounts]
-      security: [{ cookieAuth: [] }]
-      summary: Lista cuentas con balances
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AccountsOverviewResponse' }
-
-  /bff/accounts/{id}/activity:
-    get:
-      tags: [Accounts]
-      security: [{ cookieAuth: [] }]
-      summary: Historial paginado
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-        - in: query
-          name: from
-          schema: { type: string, format: date }
-        - in: query
-          name: to
-          schema: { type: string, format: date }
-        - in: query
-          name: page
-          schema: { type: integer, default: 1 }
-        - in: query
-          name: size
-          schema: { type: integer, default: 50 }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AccountActivityResponse' }
-
-  /bff/beneficiaries:
-    post:
-      tags: [Payments]
-      security: [{ cookieAuth: [] }]
-      summary: Crea beneficiario
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateBeneficiaryRequest' }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CreateBeneficiaryResponse' }
-
-  /bff/payments:
-    post:
-      tags: [Payments]
-      security: [{ cookieAuth: [] }]
-      summary: Crea pago (idempotente)
-      parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreatePaymentRequest' }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CreatePaymentResponse' }
-        "202":
-          description: Accepted
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/CreatePaymentResponse' }
-
-  /bff/payments/{id}:
-    get:
-      tags: [Payments]
-      security: [{ cookieAuth: [] }]
-      summary: Obtiene pago
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        "200":
-          description: OK
-
-  /bff/sandbox/topup:
-    post:
-      tags: [Sandbox]
-      security: [{ cookieAuth: [] }]
-      summary: Topup demo (admin)
-      parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/TopupRequest' }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/TopupResponse' }
-
-  /bff/profile:
-    patch:
-      tags: [Profile]
-      security: [{ cookieAuth: [] }]
-      summary: Actualiza perfil (parcial)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PatchProfileRequest' }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PatchProfileResponse' }
+    SandboxTopupResponse:
+      type: object
+      required: [journal_id, status]
+      properties:
+        journal_id: { type: string }
+        status: { type: string }
