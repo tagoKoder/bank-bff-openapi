@@ -124,10 +124,20 @@ components:
 
     OnboardingIntentRequest:
       type: object
-      required: [email, phone]
+      required:
+      - email
+      - phone
+      - national_id
+      - national_id_issue_date
+      - fingerprint_code
+      - id_document_front
+      - selfie
+      - monthly_income
+      - occupation_type
       properties:
         email:
           type: string
+          format: email
         phone:
           type: string
         channel:
@@ -136,6 +146,29 @@ components:
         locale:
           type: string
           nullable: true
+
+        national_id:
+          type: string
+        national_id_issue_date:
+          type: string
+          example: "2020-01-31"
+        fingerprint_code:
+          type: string
+
+        id_document_front:
+          type: string
+          format: binary
+          description: "Imagen frontal del documento (jpg/png)."
+        selfie:
+          type: string
+          format: binary
+          description: "Selfie del usuario (jpg/png)."
+
+        monthly_income:
+          type: number
+        occupation_type:
+          type: string
+          enum: [student, employee, self_employed, unemployed, retired]
 
     OnboardingIntentResponse:
       type: object
@@ -571,8 +604,14 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
-            schema: { $ref: '#/components/schemas/OnboardingIntentRequest' }
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OnboardingIntentRequest'
+            encoding:
+              id_document_front:
+                contentType: image/jpeg, image/png
+              selfie:
+                contentType: image/jpeg, image/png
       responses:
         '201':
           description: Created

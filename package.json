@@ -2,8 +2,17 @@
   "name": "@tagokoder/bff-openapi",
   "version": "0.0.1",
   "description": "OpenAPI contract for the bank BFF",
-  "files": ["openapi/bff.openapi.yaml"],
+  "files": [
+    "openapi/bff.openapi.yaml"
+  ],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
+  },
+  "devDependencies": {
+    "@stoplight/spectral-cli": "^6.15.0"
+  },
+  "scripts": {
+    "lint": "spectral lint openapi/bff.openapi.yaml -r @stoplight/spectral-rulesets/oas"
   }
+
 }
