@@ -17,13 +17,18 @@ tags:
   - name: Payments
   - name: Profile
   - name: Admin
+  - name: Webauthn
+
 
 components:
   securitySchemes:
     cookieAuth:
       type: apiKey
       in: cookie
-      name: sid
+      name: bff_sid
+      description: >
+        En HTTPS el BFF puede setear __Host-bff_sid; en local/HTTP usa bff_sid.
+        El cliente debe reenviar la cookie exactamente como la recibe.
     csrfAuth:
       type: apiKey
       in: header
@@ -368,7 +373,7 @@ components:
 
     WhoamiResponse:
       type: object
-      required: [subject_id_oidc, roles, user_status]
+      required: [subject_id_oidc, roles, user_status, mfa_required, mfa_verified]
       properties:
         subject_id_oidc:
           type: string
@@ -381,6 +386,10 @@ components:
             type: string
         user_status:
           type: string
+        mfa_required:
+          type: boolean
+        mfa_verified:
+          type: boolean
 
     SimpleStatusResponse:
       type: object
@@ -388,6 +397,70 @@ components:
       properties:
         status:
           type: string
+
+    RefreshSessionResponse:
+      type: object
+      required: [session_expires_in]
+      properties:
+        session_expires_in:
+          type: integer
+          format: int64
+          description: "TTL de la sesión (segundos). Cookie rotada/extendida."
+
+    BeginWebauthnRegistrationRequest:
+      type: object
+      properties:
+        device_name:
+          type: string
+          nullable: true
+
+    BeginWebauthnRegistrationResponse:
+      type: object
+      required: [request_id, options_json]
+      properties:
+        request_id:
+          type: string
+        options_json:
+          type: string
+          description: "JSON para navigator.credentials.create()"
+
+    FinishWebauthnRegistrationRequest:
+      type: object
+      required: [request_id, credential_json]
+      properties:
+        request_id:
+          type: string
+        credential_json:
+          type: string
+          description: "JSON resultante de navigator.credentials.create()"
+
+    BeginWebauthnAssertionResponse:
+      type: object
+      required: [request_id, options_json]
+      properties:
+        request_id:
+          type: string
+        options_json:
+          type: string
+          description: "JSON para navigator.credentials.get()"
+
+    FinishWebauthnAssertionRequest:
+      type: object
+      required: [request_id, credential_json]
+      properties:
+        request_id:
+          type: string
+        credential_json:
+          type: string
+          description: "JSON resultante de navigator.credentials.get()"
+
+    WebauthnSuccessResponse:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+
 
 paths:
   # ---------------------------
@@ -520,6 +593,196 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /bff/session/refresh:
+    post:
+      tags: [Session]
+      operationId: refreshWebSession
+      summary: Rota/renueva sesión server-side y actualiza cookie
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefreshSessionResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden (CSRF / session)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error (Identity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /bff/webauthn/registration/begin:
+    post:
+      tags: [Webauthn]
+      operationId: beginWebauthnRegistration
+      summary: Inicia registro WebAuthn (passkey)
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BeginWebauthnRegistrationRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeginWebauthnRegistrationResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error (Identity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /bff/webauthn/registration/finish:
+    post:
+      tags: [Webauthn]
+      operationId: finishWebauthnRegistration
+      summary: Finaliza registro WebAuthn
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinishWebauthnRegistrationRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebauthnSuccessResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error (Identity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /bff/webauthn/assertion/begin:
+    post:
+      tags: [Webauthn]
+      operationId: beginWebauthnAssertion
+      summary: Inicia assertion WebAuthn (MFA)
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BeginWebauthnAssertionResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error (Identity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /bff/webauthn/assertion/finish:
+    post:
+      tags: [Webauthn]
+      operationId: finishWebauthnAssertion
+      summary: Finaliza assertion WebAuthn (MFA)
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinishWebauthnAssertionRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebauthnSuccessResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error (Identity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
 
   # ---------------------------
   # EXISTENTES (CORRIGIENDO SECURITY CSRF = AND)
