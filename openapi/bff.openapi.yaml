@@ -692,6 +692,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WebauthnSuccessResponse' }
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '401':
           description: Unauthorized
           content:
@@ -767,6 +772,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WebauthnSuccessResponse' }
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '401':
           description: Unauthorized
           content:
