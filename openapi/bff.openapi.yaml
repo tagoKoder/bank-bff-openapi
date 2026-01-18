@@ -4,6 +4,7 @@ info:
   version: 1.0.0
   description: |
     API del BFF para canal web (cookie session + CSRF).
+    Onboarding usa flujo presigned S3 (no se suben bytes al BFF).
 
 servers:
   - url: http://localhost:8080
@@ -62,6 +63,9 @@ components:
           type: string
           example: "4f2c1a...csrf..."
 
+    # =========================
+    # Accounts
+    # =========================
     AccountsOverviewResponse:
       type: object
       required: [accounts]
@@ -125,23 +129,61 @@ components:
           type: string
           nullable: true
 
-    # ===========================
-    # ONBOARDING (PRESIGNED S3)
-    # ===========================
+    # =========================
+    # Onboarding (Presigned S3)
+    # =========================
+    OccupationType:
+      type: string
+      enum: [student, employee, self_employed, unemployed, retired]
 
-    OnboardingUploadIntent:
+    RegistrationState:
+      type: string
+      enum: [started, contact_verified, consented, activated, rejected, unspecified]
+
+    KycDocType:
+      type: string
+      enum: [id_front, selfie]
+
+    KycUploadStatus:
+      type: string
+      enum: [pending, confirmed, unspecified]
+
+    PresignedHeader:
       type: object
-      required: [content_type, size_bytes]
+      required: [name, value]
       properties:
-        content_type:
+        name:
           type: string
-          example: image/jpeg
-        size_bytes:
+        value:
+          type: string
+
+    PresignedUpload:
+      type: object
+      required: [doc_type, bucket, key, upload_url, headers, max_bytes, content_type, expires_in_seconds]
+      properties:
+        doc_type:
+          $ref: '#/components/schemas/KycDocType'
+        bucket:
+          type: string
+        key:
+          type: string
+        upload_url:
+          type: string
+          format: uri
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresignedHeader'
+        max_bytes:
           type: integer
           format: int64
-          example: 345678
+        content_type:
+          type: string
+        expires_in_seconds:
+          type: integer
+          format: int64
 
-    OnboardingStartRegistrationRequest:
+    OnboardingIntentRequest:
       type: object
       required:
         - email
@@ -149,8 +191,6 @@ components:
         - national_id
         - national_id_issue_date
         - fingerprint_code
-        - id_document_front
-        - selfie
         - monthly_income
         - occupation_type
       properties:
@@ -162,6 +202,7 @@ components:
         channel:
           type: string
           nullable: true
+          description: "Ej: web"
         locale:
           type: string
           nullable: true
@@ -174,64 +215,48 @@ components:
         fingerprint_code:
           type: string
 
-        id_document_front:
-          $ref: '#/components/schemas/OnboardingUploadIntent'
-        selfie:
-          $ref: '#/components/schemas/OnboardingUploadIntent'
-
         monthly_income:
           type: number
         occupation_type:
-          type: string
-          enum: [student, employee, self_employed, unemployed, retired]
+          $ref: '#/components/schemas/OccupationType'
 
-    OnboardingPresignedUpload:
-      type: object
-      required: [doc_type, bucket, key, upload_url, method, headers, expires_in]
-      properties:
-        doc_type:
+        # Hints opcionales para content-type esperado al emitir presigned
+        id_front_content_type:
           type: string
-          enum: [ID_DOCUMENT_FRONT, SELFIE]
-        bucket:
+          nullable: true
+          example: "image/jpeg"
+        selfie_content_type:
           type: string
-        key:
-          type: string
-        upload_url:
-          type: string
-          format: uri
-        method:
-          type: string
-          example: PUT
-        headers:
-          type: object
-          additionalProperties:
-            type: string
-        expires_in:
-          type: integer
-          format: int64
-          example: 900
+          nullable: true
+          example: "image/jpeg"
 
-    OnboardingStartRegistrationResponse:
+    OnboardingIntentResponse:
       type: object
-      required: [registration_id, otp_channel_hint, uploads]
+      required: [registration_id, state, uploads]
       properties:
         registration_id:
           type: string
-        otp_channel_hint:
+        state:
+          $ref: '#/components/schemas/RegistrationState'
+        created_at:
           type: string
-          example: "email"
+          format: date-time
+          nullable: true
         uploads:
           type: array
           items:
-            $ref: '#/components/schemas/OnboardingPresignedUpload'
+            $ref: '#/components/schemas/PresignedUpload'
+        otp_channel_hint:
+          type: string
+          nullable: true
+          description: "Legacy/compat. Puede omitirse."
 
-    OnboardingUploadedObject:
+    UploadedObject:
       type: object
       required: [doc_type, bucket, key]
       properties:
         doc_type:
-          type: string
-          enum: [ID_DOCUMENT_FRONT, SELFIE]
+          $ref: '#/components/schemas/KycDocType'
         bucket:
           type: string
         key:
@@ -247,40 +272,53 @@ components:
           type: string
           nullable: true
 
-    OnboardingConfirmKycRequest:
+    ConfirmKycRequest:
       type: object
-      required: [objects]
+      required: [registration_id, objects]
       properties:
+        registration_id:
+          type: string
+        channel:
+          type: string
+          nullable: true
+          description: "Ej: web"
         objects:
           type: array
           items:
-            $ref: '#/components/schemas/OnboardingUploadedObject'
+            $ref: '#/components/schemas/UploadedObject'
 
-    OnboardingConfirmKycResponse:
+    KycObjectStatus:
       type: object
-      required: [confirmed]
+      required: [doc_type, status, bucket, key]
       properties:
-        confirmed:
-          type: boolean
-          example: true
+        doc_type:
+          $ref: '#/components/schemas/KycDocType'
+        status:
+          $ref: '#/components/schemas/KycUploadStatus'
+        bucket:
+          type: string
+        key:
+          type: string
+        etag:
+          type: string
+          nullable: true
 
-    VerifyContactRequest:
+    ConfirmKycResponse:
       type: object
-      required: [registration_id, otp]
+      required: [registration_id, state, statuses]
       properties:
         registration_id:
           type: string
-        otp:
+        state:
+          $ref: '#/components/schemas/RegistrationState'
+        statuses:
+          type: array
+          items:
+            $ref: '#/components/schemas/KycObjectStatus'
+        confirmed_at:
           type: string
-
-    ConsentsRequest:
-      type: object
-      required: [registration_id, accepted]
-      properties:
-        registration_id:
-          type: string
-        accepted:
-          type: boolean
+          format: date-time
+          nullable: true
 
     ActivateRequest:
       type: object
@@ -312,6 +350,9 @@ components:
         activation_ref:
           type: string
 
+    # =========================
+    # Payments
+    # =========================
     CreateBeneficiaryRequest:
       type: object
       required: [destination_account]
@@ -396,6 +437,9 @@ components:
           type: string
           format: date-time
 
+    # =========================
+    # Profile
+    # =========================
     PatchProfileRequest:
       type: object
       properties:
@@ -428,6 +472,9 @@ components:
         updated:
           type: boolean
 
+    # =========================
+    # Admin Sandbox
+    # =========================
     SandboxTopupRequest:
       type: object
       required: [account_id, currency, amount]
@@ -451,6 +498,9 @@ components:
         status:
           type: string
 
+    # =========================
+    # Session / Whoami
+    # =========================
     WhoamiResponse:
       type: object
       required: [subject_id_oidc, roles, user_status]
@@ -483,18 +533,15 @@ components:
           format: int64
           description: "TTL de la sesión (segundos). Cookie rotada/extendida."
 
-
 paths:
-  # ===========================
-  # AUTH (SIN /bff)
-  # ===========================
-  /api/v1/auth/login/start:
+  # =========================
+  # AUTH (ahora /api/v1)
+  # =========================
+  /api/v1/auth/oidc/start:
     get:
       tags: [Auth]
       operationId: startWebLogin
       summary: Inicia OIDC login y redirige al IdP
-      description: |
-        Redirige al Authorization URL del IdP. `redirect` es el path post-login que el BFF sanitiza.
       parameters:
         - in: query
           name: redirect
@@ -520,7 +567,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  /api/v1/auth/login/callback:
+  /api/v1/auth/oidc/callback:
     get:
       tags: [Auth]
       operationId: completeWebLogin
@@ -557,9 +604,9 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  # ===========================
-  # SESSION (SIN /bff)
-  # ===========================
+  # =========================
+  # SESSION (ahora /api/v1)
+  # =========================
   /api/v1/session/logout:
     post:
       tags: [Session]
@@ -651,33 +698,9 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  /api/v1/session:
-    get:
-      tags: [Session]
-      operationId: getCurrentSession
-      summary: Identidad y estado de la sesión actual
-      security:
-        - cookieAuth: []
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WhoamiResponse' }
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-
-  # ===========================
-  # ACCOUNTS
-  # ===========================
+  # =========================
+  # Accounts (existente)
+  # =========================
   /api/v1/accounts:
     get:
       tags: [Accounts]
@@ -690,8 +713,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/AccountsOverviewResponse'
+              schema: { $ref: '#/components/schemas/AccountsOverviewResponse' }
         '401':
           description: Unauthorized
           content:
@@ -750,46 +772,27 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  # ===========================
-  # ONBOARDING (PRESIGNED)
-  # ===========================
-  /api/v1/onboarding/registrations:
+  # =========================
+  # Onboarding (presigned)
+  # =========================
+  /api/v1/onboarding/intents:
     post:
       tags: [Onboarding]
-      operationId: startOnboardingRegistration
-      summary: Inicia onboarding y emite URLs presigned para subir KYC a S3
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+      operationId: startOnboarding
+      summary: Inicia onboarding (registro/KYC) — presigned S3
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/OnboardingStartRegistrationRequest'
+            schema: { $ref: '#/components/schemas/OnboardingIntentRequest' }
       responses:
         '201':
           description: Created
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/OnboardingStartRegistrationResponse' }
+              schema: { $ref: '#/components/schemas/OnboardingIntentResponse' }
         '400':
           description: Bad request
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '403':
-          description: Forbidden
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -804,121 +807,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  /api/v1/onboarding/registrations/{registration_id}/kyc/confirm:
+  /api/v1/onboarding/kyc/confirm:
     post:
       tags: [Onboarding]
       operationId: confirmOnboardingKyc
-      summary: Confirma objetos ya subidos a S3 (bucket/key/etag)
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - in: path
-          name: registration_id
-          required: true
-          schema: { type: string }
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+      summary: Confirma KYC (verifica objetos subidos a S3)
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/OnboardingConfirmKycRequest' }
+            schema: { $ref: '#/components/schemas/ConfirmKycRequest' }
       responses:
         '200':
           description: OK
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/OnboardingConfirmKycResponse' }
+              schema: { $ref: '#/components/schemas/ConfirmKycResponse' }
         '400':
           description: Bad request
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '403':
-          description: Forbidden
+        '422':
+          description: Schema validation failed
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '502':
           description: Upstream error
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-
-  /api/v1/onboarding/verify-contact:
-    post:
-      tags: [Onboarding]
-      operationId: verifyOnboardingContact
-      summary: Verifica OTP/contacto (stub por ahora)
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/VerifyContactRequest' }
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SimpleStatusResponse' }
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '422':
-          description: Schema validation failed
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-
-  /api/v1/onboarding/consents:
-    post:
-      tags: [Onboarding]
-      operationId: registerOnboardingConsents
-      summary: Registra consentimientos (stub por ahora)
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ConsentsRequest' }
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SimpleStatusResponse' }
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '422':
-          description: Schema validation failed
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -928,14 +844,6 @@ paths:
       tags: [Onboarding]
       operationId: activateOnboarding
       summary: Activa onboarding (crea customer + account)
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
       requestBody:
         required: true
         content:
@@ -963,9 +871,9 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  # ===========================
-  # PAYMENTS
-  # ===========================
+  # =========================
+  # Payments
+  # =========================
   /api/v1/beneficiaries:
     post:
       tags: [Payments]
@@ -1104,9 +1012,9 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  # ===========================
-  # PROFILE
-  # ===========================
+  # =========================
+  # Profile
+  # =========================
   /api/v1/profile:
     patch:
       tags: [Profile]
@@ -1157,9 +1065,9 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  # ===========================
-  # ADMIN
-  # ===========================
+  # =========================
+  # Admin Sandbox
+  # =========================
   /api/v1/admin/sandbox/topups:
     post:
       tags: [Admin]
@@ -1210,6 +1118,33 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '502':
           description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  # =========================
+  # Whoami (ya lo tenías)
+  # =========================
+  /api/v1/session:
+    get:
+      tags: [Session]
+      operationId: getCurrentSession
+      summary: Identidad y estado de la sesión actual
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhoamiResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
