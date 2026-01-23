@@ -54,11 +54,17 @@ components:
       name: X-CSRF-Token
       required: true
       schema: { type: string }
-    IdempotencyKey:
+    IdempotencyKeyRequired:
       in: header
       name: Idempotency-Key
       required: true
-      schema: { type: string }
+      schema: { type: string, minLength: 8, maxLength: 128 }
+
+    IdempotencyKeyOptional:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema: { type: string, minLength: 8, maxLength: 128 }
     PageParam:
       in: query
       name: page
@@ -896,7 +902,7 @@ paths:
           name: id
           required: true
           schema: { type: string }
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
         - $ref: '#/components/parameters/XCsrfToken'
       requestBody:
         required: true
@@ -1023,7 +1029,7 @@ paths:
         route_template: /api/v1/onboarding/intents
         critical: true
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
         required: true
         content:
@@ -1077,7 +1083,7 @@ paths:
         route_template: /api/v1/onboarding/kyc/confirm
         critical: true
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
         required: true
         content:
@@ -1136,7 +1142,7 @@ paths:
         route_template: /api/v1/onboarding/activate
         critical: true
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
       requestBody:
         required: true
         content:
@@ -1189,7 +1195,7 @@ paths:
         critical: true
       parameters:
         - $ref: '#/components/parameters/XCsrfToken'
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
       requestBody:
         required: true
         content:
@@ -1264,7 +1270,7 @@ paths:
         route_template: /api/v1/payments
         critical: true
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
         - $ref: '#/components/parameters/XCsrfToken'
       requestBody:
         required: true
@@ -1390,7 +1396,7 @@ paths:
         critical: true
       parameters:
         - $ref: '#/components/parameters/XCsrfToken'
-        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
         required: true
         content:
