@@ -6,6 +6,11 @@ info:
     API del BFF para canal web (cookie session + CSRF).
     Onboarding usa flujo presigned S3 (no se suben bytes al BFF).
 
+    Convenciones:
+    - Montos: string decimal "canonical" (sin notación científica). Ej: "10.50"
+    - Idempotencia: header Idempotency-Key en endpoints mutadores con reintentos.
+    - Correlation: el BFF propaga correlation_id a micros y lo devuelve como header.
+
 servers:
   - url: http://localhost:8080
     description: Local
@@ -34,10 +39,36 @@ components:
       name: X-CSRF-Token
 
   headers:
-    Idempotency-Key:
+    X-Correlation-Id:
+      description: Correlation ID propagado extremo a extremo (BFF -> micros).
       schema:
         type: string
+    Idempotency-Key:
+      description: Clave de idempotencia para reintentos seguros.
+      schema:
+        type: string
+
+  parameters:
+    XCsrfToken:
+      in: header
+      name: X-CSRF-Token
       required: true
+      schema: { type: string }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string }
+    PageParam:
+      in: query
+      name: page
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    SizeParam:
+      in: query
+      name: size
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
 
   schemas:
     ErrorResponse:
@@ -63,6 +94,13 @@ components:
           type: string
           example: "4f2c1a...csrf..."
 
+    SimpleStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+
     # =========================
     # Accounts
     # =========================
@@ -79,14 +117,10 @@ components:
       type: object
       required: [id, product_type, currency, status, balances]
       properties:
-        id:
-          type: string
-        product_type:
-          type: string
-        currency:
-          type: string
-        status:
-          type: string
+        id: { type: string }
+        product_type: { type: string, description: "Ej: CHECKING | SAVINGS" }
+        currency: { type: string, description: "ISO-4217" }
+        status: { type: string, example: "active" }
         balances:
           $ref: '#/components/schemas/AccountBalances'
 
@@ -96,14 +130,40 @@ components:
       properties:
         ledger:
           type: string
+          description: "Decimal string"
         available:
           type: string
+          description: "Decimal string"
         hold:
           type: string
+          description: "Decimal string"
+
+    PatchAccountLimitsHttpRequest:
+      type: object
+      description: |
+        Actualiza límites diarios de entrada/salida.
+        Campos omitidos o null => no se modifican.
+      properties:
+        daily_out:
+          type: string
+          nullable: true
+          description: "Decimal string (>=0). Ej: '500.00'"
+        daily_in:
+          type: string
+          nullable: true
+          description: "Decimal string (>=0). Ej: '1000.00'"
+
+    PatchAccountLimitsHttpResponse:
+      type: object
+      required: [account_id, daily_out, daily_in]
+      properties:
+        account_id: { type: string }
+        daily_out: { type: string }
+        daily_in: { type: string }
 
     AccountActivityResponse:
       type: object
-      required: [items, page, size, total]
+      required: [items, page, size]
       properties:
         items:
           type: array
@@ -115,13 +175,14 @@ components:
           type: integer
         total:
           type: integer
+          nullable: true
+          description: "Opcional; si no hay fuente upstream para total, puede omitirse o null."
 
     AccountActivityItem:
       type: object
       required: [journal_id, booked_at]
       properties:
-        journal_id:
-          type: string
+        journal_id: { type: string }
         booked_at:
           type: string
           format: date-time
@@ -152,33 +213,26 @@ components:
       type: object
       required: [name, value]
       properties:
-        name:
-          type: string
-        value:
-          type: string
+        name: { type: string }
+        value: { type: string }
 
     PresignedUpload:
       type: object
       required: [doc_type, bucket, key, upload_url, headers, max_bytes, content_type, expires_in_seconds]
       properties:
-        doc_type:
-          $ref: '#/components/schemas/KycDocType'
-        bucket:
-          type: string
-        key:
-          type: string
+        doc_type: { $ref: '#/components/schemas/KycDocType' }
+        bucket: { type: string }
+        key: { type: string }
         upload_url:
           type: string
           format: uri
         headers:
           type: array
-          items:
-            $ref: '#/components/schemas/PresignedHeader'
+          items: { $ref: '#/components/schemas/PresignedHeader' }
         max_bytes:
           type: integer
           format: int64
-        content_type:
-          type: string
+        content_type: { type: string }
         expires_in_seconds:
           type: integer
           format: int64
@@ -194,11 +248,8 @@ components:
         - monthly_income
         - occupation_type
       properties:
-        email:
-          type: string
-          format: email
-        phone:
-          type: string
+        email: { type: string, format: email }
+        phone: { type: string }
         channel:
           type: string
           nullable: true
@@ -207,20 +258,17 @@ components:
           type: string
           nullable: true
 
-        national_id:
-          type: string
+        national_id: { type: string }
         national_id_issue_date:
           type: string
           example: "2020-01-31"
-        fingerprint_code:
-          type: string
+        fingerprint_code: { type: string }
 
         monthly_income:
           type: number
         occupation_type:
           $ref: '#/components/schemas/OccupationType'
 
-        # Hints opcionales para content-type esperado al emitir presigned
         id_front_content_type:
           type: string
           nullable: true
@@ -234,33 +282,26 @@ components:
       type: object
       required: [registration_id, state, uploads]
       properties:
-        registration_id:
-          type: string
-        state:
-          $ref: '#/components/schemas/RegistrationState'
+        registration_id: { type: string }
+        state: { $ref: '#/components/schemas/RegistrationState' }
         created_at:
           type: string
           format: date-time
           nullable: true
         uploads:
           type: array
-          items:
-            $ref: '#/components/schemas/PresignedUpload'
-        otp_channel_hint:
+          items: { $ref: '#/components/schemas/PresignedUpload' }
+        correlation_id:
           type: string
           nullable: true
-          description: "Legacy/compat. Puede omitirse."
 
     UploadedObject:
       type: object
       required: [doc_type, bucket, key]
       properties:
-        doc_type:
-          $ref: '#/components/schemas/KycDocType'
-        bucket:
-          type: string
-        key:
-          type: string
+        doc_type: { $ref: '#/components/schemas/KycDocType' }
+        bucket: { type: string }
+        key: { type: string }
         etag:
           type: string
           nullable: true
@@ -276,29 +317,23 @@ components:
       type: object
       required: [registration_id, objects]
       properties:
-        registration_id:
-          type: string
+        registration_id: { type: string }
         channel:
           type: string
           nullable: true
           description: "Ej: web"
         objects:
           type: array
-          items:
-            $ref: '#/components/schemas/UploadedObject'
+          items: { $ref: '#/components/schemas/UploadedObject' }
 
     KycObjectStatus:
       type: object
       required: [doc_type, status, bucket, key]
       properties:
-        doc_type:
-          $ref: '#/components/schemas/KycDocType'
-        status:
-          $ref: '#/components/schemas/KycUploadStatus'
-        bucket:
-          type: string
-        key:
-          type: string
+        doc_type: { $ref: '#/components/schemas/KycDocType' }
+        status: { $ref: '#/components/schemas/KycUploadStatus' }
+        bucket: { type: string }
+        key: { type: string }
         etag:
           type: string
           nullable: true
@@ -307,48 +342,45 @@ components:
       type: object
       required: [registration_id, state, statuses]
       properties:
-        registration_id:
-          type: string
-        state:
-          $ref: '#/components/schemas/RegistrationState'
+        registration_id: { type: string }
+        state: { $ref: '#/components/schemas/RegistrationState' }
         statuses:
           type: array
-          items:
-            $ref: '#/components/schemas/KycObjectStatus'
+          items: { $ref: '#/components/schemas/KycObjectStatus' }
         confirmed_at:
           type: string
           format: date-time
+          nullable: true
+        correlation_id:
+          type: string
           nullable: true
 
     ActivateRequest:
       type: object
       required: [registration_id, full_name, tin, birth_date, country, email, phone]
       properties:
-        registration_id:
-          type: string
-        full_name:
-          type: string
-        tin:
-          type: string
-        birth_date:
-          type: string
-        country:
-          type: string
-        email:
-          type: string
-        phone:
-          type: string
+        registration_id: { type: string }
+        full_name: { type: string }
+        tin: { type: string }
+        birth_date: { type: string, example: "1999-12-31" }
+        country: { type: string, minLength: 2, maxLength: 2 }
+        email: { type: string, format: email }
+        phone: { type: string }
+        accepted_terms:
+          type: boolean
+          nullable: true
+          description: "Recomendado si tu UI exige aceptación."
 
     ActivateResponse:
       type: object
       required: [customer_id, account_id, activation_ref]
       properties:
-        customer_id:
+        customer_id: { type: string }
+        account_id: { type: string }
+        activation_ref: { type: string }
+        correlation_id:
           type: string
-        account_id:
-          type: string
-        activation_ref:
-          type: string
+          nullable: true
 
     # =========================
     # Payments
@@ -357,8 +389,7 @@ components:
       type: object
       required: [destination_account]
       properties:
-        destination_account:
-          type: string
+        destination_account: { type: string }
         alias:
           type: string
           nullable: true
@@ -367,21 +398,18 @@ components:
       type: object
       required: [beneficiary_id]
       properties:
-        beneficiary_id:
-          type: string
+        beneficiary_id: { type: string }
 
     CreatePaymentRequest:
       type: object
       required: [source_account, destination_account, currency, amount]
       properties:
-        source_account:
-          type: string
-        destination_account:
-          type: string
-        currency:
-          type: string
+        source_account: { type: string }
+        destination_account: { type: string }
+        currency: { type: string, minLength: 3, maxLength: 3 }
         amount:
           type: string
+          description: "Decimal string"
         memo:
           type: string
           nullable: true
@@ -390,8 +418,7 @@ components:
       type: object
       required: [payment_id, status]
       properties:
-        payment_id:
-          type: string
+        payment_id: { type: string }
         status:
           type: string
           enum: [pending, posted, rejected, failed]
@@ -400,10 +427,8 @@ components:
       type: object
       required: [step, state, attempted_at]
       properties:
-        step:
-          type: string
-        state:
-          type: string
+        step: { type: string }
+        state: { type: string }
         details_json:
           type: string
           nullable: true
@@ -415,24 +440,16 @@ components:
       type: object
       required: [payment_id, status, idempotency_key, source_account, destination_account, currency, amount, steps, created_at]
       properties:
-        payment_id:
-          type: string
-        status:
-          type: string
-        idempotency_key:
-          type: string
-        source_account:
-          type: string
-        destination_account:
-          type: string
-        currency:
-          type: string
-        amount:
-          type: string
+        payment_id: { type: string }
+        status: { type: string }
+        idempotency_key: { type: string }
+        source_account: { type: string }
+        destination_account: { type: string }
+        currency: { type: string }
+        amount: { type: string }
         steps:
           type: array
-          items:
-            $ref: '#/components/schemas/PaymentStep'
+          items: { $ref: '#/components/schemas/PaymentStep' }
         created_at:
           type: string
           format: date-time
@@ -479,12 +496,11 @@ components:
       type: object
       required: [account_id, currency, amount]
       properties:
-        account_id:
-          type: string
-        currency:
-          type: string
+        account_id: { type: string }
+        currency: { type: string }
         amount:
           type: string
+          description: "Decimal string"
         memo:
           type: string
           nullable: true
@@ -493,10 +509,8 @@ components:
       type: object
       required: [journal_id, status]
       properties:
-        journal_id:
-          type: string
-        status:
-          type: string
+        journal_id: { type: string }
+        status: { type: string }
 
     # =========================
     # Session / Whoami
@@ -505,24 +519,14 @@ components:
       type: object
       required: [subject_id_oidc, roles, user_status]
       properties:
-        subject_id_oidc:
-          type: string
+        subject_id_oidc: { type: string }
         customer_id:
           type: string
           nullable: true
         roles:
           type: array
-          items:
-            type: string
-        user_status:
-          type: string
-
-    SimpleStatusResponse:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
+          items: { type: string }
+        user_status: { type: string }
 
     RefreshSessionResponse:
       type: object
@@ -535,19 +539,35 @@ components:
 
 paths:
   # =========================
-  # AUTH (ahora /api/v1)
+  # AUTH
   # =========================
   /api/v1/auth/oidc/start:
     get:
       tags: [Auth]
       operationId: startWebLogin
       summary: Inicia OIDC login y redirige al IdP
+      description: |
+        Orquestación:
+        - BFF llama a Identity para obtener authorization_url.
+        - BFF responde 302 Location.
+      x-grpc:
+        service: bank.identity.v1.OidcAuthService
+        method: StartOidcLogin
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.StartOidcLogin
+            when: always
+            notes: "Devuelve authorization_url y state."
+      x-audit:
+        action: auth.oidc.start
+        route_template: /api/v1/auth/oidc/start
+        critical: false
       parameters:
         - in: query
           name: redirect
           required: false
-          schema:
-            type: string
+          schema: { type: string }
           description: "Path destino post-login (ej: /home)"
       responses:
         '302':
@@ -556,6 +576,8 @@ paths:
             Location:
               schema: { type: string }
               required: true
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
         '400':
           description: Bad request
           content:
@@ -572,6 +594,24 @@ paths:
       tags: [Auth]
       operationId: completeWebLogin
       summary: Callback OIDC; crea cookie de sesión y redirige al destino final
+      description: |
+        Orquestación:
+        - BFF llama a Identity.CompleteOidcLogin(code,state,...).
+        - BFF setea cookie session_id y materializa CSRF (cookie/endpoint /session/csrf).
+        - BFF redirige a redirect_after_login.
+      x-grpc:
+        service: bank.identity.v1.OidcAuthService
+        method: CompleteOidcLogin
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.CompleteOidcLogin
+            when: always
+            notes: "Crea sesión server-side y retorna session_id + redirect."
+      x-audit:
+        action: auth.oidc.complete
+        route_template: /api/v1/auth/oidc/callback
+        critical: true
       parameters:
         - in: query
           name: code
@@ -588,6 +628,8 @@ paths:
             Location:
               schema: { type: string }
               required: true
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
         '400':
           description: Missing/invalid parameters
           content:
@@ -605,24 +647,37 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   # =========================
-  # SESSION (ahora /api/v1)
+  # SESSION
   # =========================
   /api/v1/session/logout:
     post:
       tags: [Session]
       operationId: logoutWebSession
-      summary: Cierra sesión (invalida upstream si aplica) y limpia cookies
+      summary: Cierra sesión y limpia cookies
       security:
         - cookieAuth: []
           csrfAuth: []
+      x-grpc:
+        service: bank.identity.v1.OidcAuthService
+        method: LogoutSession
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.LogoutSession
+            when: always
+            notes: "Invalida sesión server-side."
+      x-audit:
+        action: session.logout
+        route_template: /api/v1/session/logout
+        critical: true
       parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/XCsrfToken'
       responses:
         '204':
           description: No Content
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
         '401':
           description: Unauthorized
           content:
@@ -646,9 +701,22 @@ paths:
       summary: Devuelve el CSRF token actual (o lo crea si no existe)
       security:
         - cookieAuth: []
+      x-bff-orchestration:
+        calls:
+          - service: bff
+            rpc: none
+            when: always
+            notes: "CSRF token se gestiona en BFF (cookie/secret) y se devuelve al cliente."
+      x-audit:
+        action: session.csrf.get
+        route_template: /api/v1/session/csrf
+        critical: false
       responses:
         '200':
           description: OK
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CsrfTokenResponse' }
@@ -658,12 +726,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '502':
-          description: Upstream error (Identity)
+          description: Forbidden (CSRF / session)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -676,14 +739,27 @@ paths:
       security:
         - cookieAuth: []
           csrfAuth: []
+      x-grpc:
+        service: bank.identity.v1.OidcAuthService
+        method: RefreshSession
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: always
+            notes: "Rota sesión y devuelve access_token para downstream."
+      x-audit:
+        action: session.refresh
+        route_template: /api/v1/session/refresh
+        critical: true
       parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/XCsrfToken'
       responses:
         '200':
           description: OK
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RefreshSessionResponse' }
@@ -703,8 +779,52 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
+  /api/v1/session:
+    get:
+      tags: [Session]
+      operationId: getCurrentSession
+      summary: Identidad y estado de la sesión actual
+      security:
+        - cookieAuth: []
+      x-grpc:
+        service: bank.identity.v1.OidcAuthService
+        method: GetSessionInfo
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.GetSessionInfo
+            when: always
+            notes: "Devuelve roles + customer_id (si ya está ligado)."
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: "conditional"
+            notes: "Si access_token expiró y se requiere downstream."
+      x-audit:
+        action: session.info
+        route_template: /api/v1/session
+        critical: false
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/X-Correlation-Id'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WhoamiResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
   # =========================
-  # Accounts (existente)
+  # Accounts
   # =========================
   /api/v1/accounts:
     get:
@@ -713,9 +833,37 @@ paths:
       summary: Resumen de cuentas del customer autenticado
       security:
         - cookieAuth: []
+      description: |
+        Orquestación:
+        - BFF resuelve customer_id desde la sesión (Identity.GetSessionInfo o cache local).
+        - (Opcional) RefreshSession si el access_token para downstream expiró.
+        - Accounts.ListAccounts(customer_id).
+      x-grpc:
+        service: bank.accounts.v1.AccountsService
+        method: ListAccounts
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.GetSessionInfo
+            when: "conditional"
+            notes: "Si el BFF no tiene customer_id en cache."
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: "conditional"
+            notes: "Si no hay access_token válido para llamar Accounts."
+          - service: accounts
+            rpc: AccountsService.ListAccounts
+            when: always
+            notes: "Retorna lista con balances."
+      x-audit:
+        action: accounts.list
+        route_template: /api/v1/accounts
+        critical: false
       responses:
         '200':
           description: OK
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AccountsOverviewResponse' }
@@ -735,6 +883,83 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
+  /api/v1/accounts/{id}/limits:
+    patch:
+      tags: [Accounts]
+      operationId: patchAccountLimits
+      summary: Actualiza límites diarios de la cuenta
+      security:
+        - cookieAuth: []
+          csrfAuth: []
+      description: |
+        Orquestación:
+        - BFF valida ownership/autorización del account_id (por policy/AVP y/o verificación Accounts).
+        - Accounts.PatchAccountLimits(id, daily_out, daily_in).
+        Idempotencia:
+        - Requerido Idempotency-Key para reintentos seguros.
+      x-grpc:
+        service: bank.accounts.v1.AccountsService
+        method: PatchAccountLimits
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: "conditional"
+            notes: "Si no hay access_token válido para downstream."
+          - service: accounts
+            rpc: AccountsService.PatchAccountLimits
+            when: always
+            notes: "Se recomienda propagar Idempotency-Key como metadata y/o campo idempotency_key."
+      x-audit:
+        action: accounts.limits.patch
+        route_template: /api/v1/accounts/{id}/limits
+        critical: true
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XCsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PatchAccountLimitsHttpRequest' }
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PatchAccountLimitsHttpResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '409':
+          description: Conflict (idempotency mismatch)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
   /api/v1/accounts/{id}/activity:
     get:
       tags: [Accounts]
@@ -742,22 +967,39 @@ paths:
       summary: Actividad (journal entries) de una cuenta
       security:
         - cookieAuth: []
+      description: |
+        Orquestación:
+        - BFF verifica autorización de lectura sobre la cuenta.
+        - Ledger.ListAccountJournalEntries(account_id, from/to, page/size).
+      x-grpc:
+        service: bank.ledgerpayments.v1.LedgerService
+        method: ListAccountJournalEntries
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: "conditional"
+            notes: "Si no hay access_token válido para downstream."
+          - service: ledger
+            rpc: LedgerService.ListAccountJournalEntries
+            when: always
+            notes: "Devuelve entries paginadas."
+      x-audit:
+        action: accounts.activity.list
+        route_template: /api/v1/accounts/{id}/activity
+        critical: false
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
-        - in: query
-          name: page
-          required: false
-          schema: { type: integer }
-        - in: query
-          name: size
-          required: false
-          schema: { type: integer }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
       responses:
         '200':
           description: OK
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AccountActivityResponse' }
@@ -778,13 +1020,33 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   # =========================
-  # Onboarding (presigned)
+  # Onboarding
   # =========================
   /api/v1/onboarding/intents:
     post:
       tags: [Onboarding]
       operationId: startOnboarding
       summary: Inicia onboarding (registro/KYC) — presigned S3
+      description: |
+        Orquestación:
+        - Identity.StartRegistration crea registration_id y retorna presigned uploads.
+        Idempotencia:
+        - Recomendado Idempotency-Key (si el cliente reintenta por timeouts).
+      x-grpc:
+        service: bank.identity.v1.OnboardingService
+        method: StartRegistration
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OnboardingService.StartRegistration
+            when: always
+            notes: "Retorna presigned uploads; el cliente sube directo a S3."
+      x-audit:
+        action: onboarding.intent.create
+        route_template: /api/v1/onboarding/intents
+        critical: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -793,6 +1055,8 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OnboardingIntentResponse' }
@@ -817,6 +1081,26 @@ paths:
       tags: [Onboarding]
       operationId: confirmOnboardingKyc
       summary: Confirma KYC (verifica objetos subidos a S3)
+      description: |
+        Orquestación:
+        - Identity.ConfirmRegistrationKyc valida objetos vía HeadObject/ETag y marca confirmación.
+        Idempotencia:
+        - Recomendado Idempotency-Key en reintentos.
+      x-grpc:
+        service: bank.identity.v1.OnboardingService
+        method: ConfirmRegistrationKyc
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OnboardingService.ConfirmRegistrationKyc
+            when: always
+            notes: "Verifica bucket/key/etag y retorna status por doc."
+      x-audit:
+        action: onboarding.kyc.confirm
+        route_template: /api/v1/onboarding/kyc/confirm
+        critical: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -825,6 +1109,8 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ConfirmKycResponse' }
@@ -849,6 +1135,31 @@ paths:
       tags: [Onboarding]
       operationId: activateOnboarding
       summary: Activa onboarding (crea customer + account)
+      description: |
+        Orquestación (BFF):
+        - BFF llama a Identity.ActivateRegistration.
+        Orquestación (Identity, interno):
+        - Valida estado del registration_id (KYC confirmado, etc).
+        - Crea/obtiene customer en Accounts (external_ref = registration_id).
+        - Crea cuenta(s) en Accounts (idempotente por external_ref).
+        - (Opcional) aplica bonus en Ledger.
+        Idempotencia:
+        - Requerido Idempotency-Key; si el cliente reintenta, debe devolver la misma activation_ref.
+      x-grpc:
+        service: bank.identity.v1.OnboardingService
+        method: ActivateRegistration
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OnboardingService.ActivateRegistration
+            when: always
+            notes: "Identity orquesta Accounts/Ledger internamente."
+      x-audit:
+        action: onboarding.activate
+        route_template: /api/v1/onboarding/activate
+        critical: true
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -857,6 +1168,8 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ActivateResponse' }
@@ -887,11 +1200,19 @@ paths:
       security:
         - cookieAuth: []
           csrfAuth: []
+      x-bff-orchestration:
+        calls:
+          - service: bff
+            rpc: none
+            when: always
+            notes: "MVP: almacenamiento/validación en BFF o micro futuro (no definido en protos actuales)."
+      x-audit:
+        action: payments.beneficiary.create
+        route_template: /api/v1/beneficiaries
+        critical: true
       parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/XCsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -900,6 +1221,8 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CreateBeneficiaryResponse' }
@@ -937,15 +1260,35 @@ paths:
       security:
         - cookieAuth: []
           csrfAuth: []
+      description: |
+        Orquestación:
+        - BFF valida request (formato, currency, amount).
+        - (Condicional) RefreshSession para access_token downstream.
+        - Payments.PostPayment con Idempotency-Key.
+        Interno (Payments):
+        - Valida cuentas y límites (Accounts Internal).
+        - Reserva hold (Accounts Internal).
+        - Postea journal/outbox.
+      x-grpc:
+        service: bank.ledgerpayments.v1.PaymentsService
+        method: PostPayment
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: "conditional"
+            notes: "Si no hay access_token válido."
+          - service: payments
+            rpc: PaymentsService.PostPayment
+            when: always
+            notes: "Propaga Idempotency-Key; initiated_by=subject."
+      x-audit:
+        action: payments.create
+        route_template: /api/v1/payments
+        critical: true
       parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: { type: string }
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XCsrfToken'
       requestBody:
         required: true
         content:
@@ -954,6 +1297,8 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CreatePaymentResponse' }
@@ -990,6 +1335,19 @@ paths:
       summary: Obtiene estado/detalle de un pago
       security:
         - cookieAuth: []
+      x-grpc:
+        service: bank.ledgerpayments.v1.PaymentsService
+        method: GetPayment
+      x-bff-orchestration:
+        calls:
+          - service: payments
+            rpc: PaymentsService.GetPayment
+            when: always
+            notes: "Devuelve pasos del workflow."
+      x-audit:
+        action: payments.get
+        route_template: /api/v1/payments/{id}
+        critical: false
       parameters:
         - in: path
           name: id
@@ -998,6 +1356,8 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/GetPaymentResponse' }
@@ -1028,11 +1388,32 @@ paths:
       security:
         - cookieAuth: []
           csrfAuth: []
+      description: |
+        Orquestación:
+        - BFF resuelve customer_id desde sesión.
+        - Accounts.CustomersService.PatchCustomer con wrappers/nullable.
+        Idempotencia:
+        - Recomendado Idempotency-Key si el cliente reintenta.
+      x-grpc:
+        service: bank.accounts.v1.CustomersService
+        method: PatchCustomer
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.GetSessionInfo
+            when: "conditional"
+            notes: "Para obtener customer_id si no está en cache."
+          - service: accounts
+            rpc: CustomersService.PatchCustomer
+            when: always
+            notes: "Mapea PatchProfileRequest a PatchCustomerRequest."
+      x-audit:
+        action: profile.patch
+        route_template: /api/v1/profile
+        critical: true
       parameters:
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/XCsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1041,6 +1422,8 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PatchProfileResponse' }
@@ -1081,15 +1464,31 @@ paths:
       security:
         - cookieAuth: []
           csrfAuth: []
+      description: |
+        Orquestación:
+        - Ledger.CreditAccount (reason=sandbox_topup).
+        Idempotencia:
+        - Requerido Idempotency-Key para reintentos seguros.
+      x-grpc:
+        service: bank.ledgerpayments.v1.LedgerService
+        method: CreditAccount
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: "conditional"
+            notes: "Si no hay access_token válido."
+          - service: ledger
+            rpc: LedgerService.CreditAccount
+            when: always
+            notes: "Propaga Idempotency-Key; initiated_by=subject."
+      x-audit:
+        action: admin.sandbox.topup
+        route_template: /api/v1/admin/sandbox/topups
+        critical: true
       parameters:
-        - in: header
-          name: Idempotency-Key
-          required: true
-          schema: { type: string }
-        - in: header
-          name: X-CSRF-Token
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XCsrfToken'
       requestBody:
         required: true
         content:
@@ -1098,6 +1497,8 @@ paths:
       responses:
         '201':
           description: Created
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SandboxTopupResponse' }
@@ -1123,33 +1524,6 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '502':
           description: Upstream error
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-
-  # =========================
-  # Whoami (ya lo tenías)
-  # =========================
-  /api/v1/session:
-    get:
-      tags: [Session]
-      operationId: getCurrentSession
-      summary: Identidad y estado de la sesión actual
-      security:
-        - cookieAuth: []
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WhoamiResponse' }
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '403':
-          description: Forbidden
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
