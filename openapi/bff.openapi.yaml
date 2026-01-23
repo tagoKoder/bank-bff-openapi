@@ -490,29 +490,6 @@ components:
           type: boolean
 
     # =========================
-    # Admin Sandbox
-    # =========================
-    SandboxTopupRequest:
-      type: object
-      required: [account_id, currency, amount]
-      properties:
-        account_id: { type: string }
-        currency: { type: string }
-        amount:
-          type: string
-          description: "Decimal string"
-        memo:
-          type: string
-          nullable: true
-
-    SandboxTopupResponse:
-      type: object
-      required: [journal_id, status]
-      properties:
-        journal_id: { type: string }
-        status: { type: string }
-
-    # =========================
     # Session / Whoami
     # =========================
     WhoamiResponse:
@@ -1427,81 +1404,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PatchProfileResponse' }
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '422':
-          description: Schema validation failed
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-        '502':
-          description: Upstream error
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorResponse' }
-
-  # =========================
-  # Admin Sandbox
-  # =========================
-  /api/v1/admin/sandbox/topups:
-    post:
-      tags: [Admin]
-      operationId: sandboxTopup
-      summary: Top-up admin (sandbox)
-      security:
-        - cookieAuth: []
-          csrfAuth: []
-      description: |
-        Orquestación:
-        - Ledger.CreditAccount (reason=sandbox_topup).
-        Idempotencia:
-        - Requerido Idempotency-Key para reintentos seguros.
-      x-grpc:
-        service: bank.ledgerpayments.v1.LedgerService
-        method: CreditAccount
-      x-bff-orchestration:
-        calls:
-          - service: identity
-            rpc: OidcAuthService.RefreshSession
-            when: "conditional"
-            notes: "Si no hay access_token válido."
-          - service: ledger
-            rpc: LedgerService.CreditAccount
-            when: always
-            notes: "Propaga Idempotency-Key; initiated_by=subject."
-      x-audit:
-        action: admin.sandbox.topup
-        route_template: /api/v1/admin/sandbox/topups
-        critical: true
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/XCsrfToken'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/SandboxTopupRequest' }
-      responses:
-        '201':
-          description: Created
-          headers:
-            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SandboxTopupResponse' }
         '400':
           description: Bad request
           content:
