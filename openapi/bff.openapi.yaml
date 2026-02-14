@@ -124,6 +124,10 @@ components:
       required: [id, product_type, currency, status, balances]
       properties:
         id: { type: string }
+        account_number:
+          type: string
+          example: "000000012345"
+          description: "Número de cuenta normalizado (12 dígitos)."
         product_type: { type: string, description: "Ej: CHECKING | SAVINGS" }
         currency: { type: string, description: "ISO-4217" }
         status: { type: string, example: "active" }
@@ -167,34 +171,105 @@ components:
         daily_out: { type: string }
         daily_in: { type: string }
 
-    AccountActivityResponse:
+    # -------------------------
+    # NUEVO: Lookup por account_number (destinatario)
+    # -------------------------
+    AccountLookupResponse:
+      type: object
+      required: [account]
+      properties:
+        account:
+          $ref: '#/components/schemas/AccountLookupItem'
+
+    AccountLookupItem:
+      type: object
+      required: [account_id, account_number, display_name, product_type, currency, status]
+      properties:
+        account_id: { type: string, format: uuid }
+        account_number:
+          type: string
+          example: "000000012345"
+          description: "Número de cuenta normalizado (12 dígitos)."
+        display_name:
+          type: string
+          example: "Juan Perez"
+          description: "Nombre mostrado del titular (demo)."
+        product_type:
+          type: string
+          example: "CHECKING"
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        status:
+          type: string
+          example: "active"
+
+    # -------------------------
+    # NUEVO: Estado de cuenta / Movimientos (Statement)
+    # -------------------------
+    AccountStatementResponse:
       type: object
       required: [items, page, size]
       properties:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/AccountActivityItem'
+            $ref: '#/components/schemas/StatementItem'
         page:
           type: integer
+          minimum: 1
         size:
           type: integer
+          minimum: 1
         total:
           type: integer
           nullable: true
-          description: "Opcional; si no hay fuente upstream para total, puede omitirse o null."
+          description: "Opcional si no hay total disponible."
 
-    AccountActivityItem:
+    StatementItem:
       type: object
-      required: [journal_id, booked_at]
+      required: [journal_id, booked_at, currency, direction, amount, kind]
       properties:
-        journal_id: { type: string }
+        journal_id:
+          type: string
+          description: "Journal/entry id del ledger"
         booked_at:
           type: string
           format: date-time
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        direction:
+          type: string
+          enum: [debit, credit]
+        amount:
+          type: string
+          description: "Decimal string"
+        kind:
+          type: string
+          example: "transfer"
         memo:
           type: string
           nullable: true
+          description: "Referencia externa / external_ref"
+        counterparty_account_id:
+          type: string
+          nullable: true
+          format: uuid
+        counterparty:
+          $ref: '#/components/schemas/CounterpartyView'
+          nullable: true
+
+    CounterpartyView:
+      type: object
+      required: [account_id, account_number, display_name, account_type]
+      properties:
+        account_id: { type: string, format: uuid }
+        account_number: { type: string, example: "000000009999" }
+        display_name: { type: string, example: "Maria Lopez" }
+        account_type: { type: string, example: "checking" }
 
     # =========================
     # Onboarding (Presigned S3)
@@ -949,41 +1024,45 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
 
-  /api/v1/accounts/{id}/activity:
+
+  /api/v1/accounts/lookup:
     get:
       tags: [Accounts]
-      operationId: getAccountActivity
-      summary: Actividad (journal entries) de una cuenta
+      operationId: lookupAccountByNumber
+      summary: Consulta cuenta por número de cuenta (account_number)
       security:
         - cookieAuth: []
       description: |
+        Uso típico:
+        - Validar destinatario antes de crear un pago/transferencia.
         Orquestación:
-        - BFF verifica autorización de lectura sobre la cuenta.
-        - Ledger.ListAccountJournalEntries(account_id, from/to, page/size).
+        - (Condicional) RefreshSession para access_token downstream.
+        - Accounts.GetAccountByNumber(account_number, include_inactive).
       x-grpc:
-        service: bank.ledgerpayments.v1.LedgerService
-        method: ListAccountJournalEntries
+        service: bank.accounts.v1.AccountsService
+        method: GetAccountByNumber
       x-bff-orchestration:
         calls:
           - service: identity
             rpc: OidcAuthService.RefreshSession
             when: "conditional"
             notes: "Si no hay access_token válido para downstream."
-          - service: ledger
-            rpc: LedgerService.ListAccountJournalEntries
+          - service: accounts
+            rpc: AccountsService.GetAccountByNumber
             when: always
-            notes: "Devuelve entries paginadas."
+            notes: "Devuelve account_id + display_name + currency + status."
       x-audit:
-        action: accounts.activity.list
-        route_template: /api/v1/accounts/{id}/activity
+        action: accounts.lookup
+        route_template: /api/v1/accounts/lookup
         critical: false
       parameters:
-        - in: path
-          name: id
+        - in: query
+          name: account_number
           required: true
-          schema: { type: string }
-        - $ref: '#/components/parameters/PageParam'
-        - $ref: '#/components/parameters/SizeParam'
+          schema:
+            type: string
+            pattern: '^\d{1,12}$'
+          description: "Número de cuenta (1..12 dígitos). Puede venir con ceros a la izquierda."
       responses:
         '200':
           description: OK
@@ -991,7 +1070,99 @@ paths:
             X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AccountActivityResponse' }
+              schema: { $ref: '#/components/schemas/AccountLookupResponse' }
+        '400':
+          description: Bad request (formato inválido)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '404':
+          description: Not found (no existe)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502':
+          description: Upstream error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /api/v1/accounts/{id}/statement:
+    get:
+      tags: [Accounts]
+      operationId: getAccountStatement
+      summary: Estado de cuenta / movimientos (statement)
+      security:
+        - cookieAuth: []
+      description: |
+        Orquestación (BFF):
+        - BFF verifica autorización/ownership del account_id (policy/AVP y/o Accounts).
+        - BFF llama a Accounts.ListAccountStatement(...).
+        Orquestación (Accounts, interno):
+        - Accounts consulta a LedgerService.ListAccountStatement para obtener movimientos.
+        - Si include_counterparty=true, Ledger puede enriquecer con InternalAccountsService.BatchGetAccountSummaries.
+      x-grpc:
+        service: bank.accounts.v1.AccountsService
+        method: ListAccountStatement
+      x-bff-orchestration:
+        calls:
+          - service: identity
+            rpc: OidcAuthService.RefreshSession
+            when: "conditional"
+            notes: "Si no hay access_token válido para downstream."
+          - service: accounts
+            rpc: AccountsService.ListAccountStatement
+            when: always
+            notes: "Accounts orquesta consulta al ledger internamente."
+      x-audit:
+        action: accounts.statement.list
+        route_template: /api/v1/accounts/{id}/statement
+        critical: false
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: from
+          required: false
+          schema: { type: string, format: date-time }
+          description: "Inicio del rango (RFC3339)."
+        - in: query
+          name: to
+          required: false
+          schema: { type: string, format: date-time }
+          description: "Fin del rango (RFC3339)."
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - in: query
+          name: include_counterparty
+          required: false
+          schema: { type: boolean, default: false }
+          description: "Si true, devuelve counterparty enriquecido."
+      responses:
+        '200':
+          description: OK
+          headers:
+            X-Correlation-Id: { $ref: '#/components/headers/X-Correlation-Id' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountStatementResponse' }
+        '400':
+          description: Bad request (rango/params inválidos)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         '401':
           description: Unauthorized
           content:
@@ -1007,7 +1178,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
-
   # =========================
   # Onboarding
   # =========================
