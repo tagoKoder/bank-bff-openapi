@@ -1,7 +1,10 @@
 openapi: 3.0.3
 info:
-  title: BFF Web API
+  title: Imaginary Bank BFF Web API
   version: 1.1.0
+  contact:
+    name: Imaginary Bank Engineering
+    url: https://github.com/tagoKoder/bank-bff-openapi
   description: |
     API REST pública del BFF para el canal web de Imaginary Bank.
     El navegador solo utiliza sesión mediante cookie HttpOnly y protección CSRF;
@@ -11,6 +14,8 @@ info:
     La autorización sobre cada recurso se verifica en el microservicio propietario,
     incluso cuando el BFF realice comprobaciones adicionales.
     La contabilización y las proyecciones de saldos pueden presentar consistencia eventual.
+  license:
+    name: Proprietary
 
 servers:
   - url: http://localhost:8080
@@ -45,11 +50,6 @@ components:
   headers:
     X-Correlation-Id:
       description: Identificador de correlación propagado sin incluir credenciales ni datos personales.
-      schema:
-        type: string
-    Idempotency-Key:
-      description: Identificador de solicitud para detección de reintentos. La lógica de negocio debe aplicar 
-        la idempotencia de forma persistente; exigir el header por sí solo no es suficiente.
       schema:
         type: string
 
@@ -107,12 +107,6 @@ components:
           type: string
           example: "4f2c1a...csrf..."
 
-    SimpleStatusResponse:
-      type: object
-      required: [status]
-      properties:
-        status:
-          type: string
 
     # =========================
     # Accounts
@@ -273,7 +267,6 @@ components:
           format: uuid
         counterparty:
           $ref: '#/components/schemas/CounterpartyView'
-          nullable: true
 
     CounterpartyView:
       type: object
@@ -615,6 +608,7 @@ paths:
       tags: [Auth]
       operationId: startWebLogin
       summary: Inicia OIDC login y redirige al IdP
+      security: []
       description: |
         Orquestación:
         - BFF llama a Identity para obtener authorization_url.
@@ -663,6 +657,7 @@ paths:
       tags: [Auth]
       operationId: completeWebLogin
       summary: Callback OIDC; crea cookie de sesión y redirige al destino final
+      security: []
       description: |
         Orquestación:
         - BFF llama a Identity.CompleteOidcLogin(code,state,...).
@@ -770,6 +765,17 @@ paths:
       tags: [Session]
       operationId: getWebCsrfToken
       summary: Devuelve el CSRF token actual (o lo crea si no existe)
+      description: |
+        Obtiene el token CSRF asociado a la sesión autenticada.
+
+        Si todavía no existe un token válido, el BFF genera uno
+        y lo entrega mediante la respuesta HTTP.
+
+        El frontend utiliza este token en el encabezado
+        X-CSRF-Token para operaciones que modifican estado.
+
+        La operación requiere una sesión válida y no devuelve
+        tokens de acceso OAuth/OIDC.
       security:
         - cookieAuth: []
       x-bff-orchestration:
@@ -1189,6 +1195,7 @@ paths:
       tags: [Onboarding]
       operationId: startOnboarding
       summary: Inicia onboarding (registro/KYC) — presigned S3
+      security: []
       description: |
         Orquestación:
         - Identity.StartRegistration crea registration_id y retorna presigned uploads.
@@ -1244,6 +1251,7 @@ paths:
       tags: [Onboarding]
       operationId: confirmOnboardingKyc
       summary: Confirma KYC (verifica objetos subidos a S3)
+      security: []
       description: |
         Orquestación:
         - Identity.ConfirmRegistrationKyc valida objetos vía HeadObject/ETag y marca confirmación.
@@ -1299,6 +1307,7 @@ paths:
       tags: [Onboarding]
       operationId: activateOnboarding
       summary: Activa onboarding (crea customer + account)
+      security: []
       description: |-
         Activa un registro KYC confirmado mediante Identity.ActivateRegistration. Identity coordina la creación de customer y una cuenta inicial por el servicio interno Accounts; el bono demo se acredita una sola vez mediante Ledger. La clave HTTP de idempotencia se valida en BFF; la deduplicación durable de la operación se basa en registration_id/activation_ref y se verifica en Identity/Accounts/Ledger. No se reenvía Idempotency-Key en el mensaje Proto actual porque no contiene ese campo. El saldo proyectado puede actualizarse posteriormente.
       x-grpc:

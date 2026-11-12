@@ -28,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Validate OpenAPI
-        run: npm run lint
+        run: npx --no-install redocly lint openapi/bff.openapi.yaml
 
       - name: Verify package contents
         run: |
@@ -75,9 +75,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Validate OpenAPI before publishing
-        run: npm run lint
 
       - name: Validate tag format
         shell: bash
