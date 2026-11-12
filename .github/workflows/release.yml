@@ -1,4 +1,4 @@
-name: publish-npm
+name: publish-openapi
 
 on:
   push:
@@ -7,26 +7,95 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  publish:
+  validate:
+    name: Validate OpenAPI contract
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "24"
+          cache: npm
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate OpenAPI
+        run: npm run lint
+
+      - name: Verify package contents
+        run: |
+          npm pack --dry-run --json > pack-report.json
+
+          node - <<'NODE'
+          const fs = require("node:fs");
+
+          const report = JSON.parse(
+            fs.readFileSync("pack-report.json", "utf8")
+          );
+
+          const files = report[0].files.map(f => f.path);
+
+          if (!files.includes("openapi/bff.openapi.yaml")) {
+            throw new Error(
+              "Missing openapi/bff.openapi.yaml in npm package"
+            );
+          }
+
+          console.log("OpenAPI specification included in package.");
+          NODE
+
+  publish:
+    name: Publish GitHub Package
+    needs: validate
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
           registry-url: "https://npm.pkg.github.com"
           scope: "@tagokoder"
+          package-manager-cache: false
 
-      - name: Set package version from tag
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate OpenAPI before publishing
+        run: npm run lint
+
+      - name: Validate tag format
+        shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          npm version "$TAG" --no-git-tag-version
+          VERSION="${GITHUB_REF_NAME#v}"
 
-      - name: Publish to GitHub Packages
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version tag: $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Set version from Git tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npm version "$VERSION" --no-git-tag-version
+
+      - name: Publish package
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm publish
+        run: npm publish --registry=https://npm.pkg.github.com
