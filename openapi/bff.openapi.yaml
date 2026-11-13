@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Imaginary Bank BFF Web API
-  version: 1.1.0
+  version: 1.1.1
   contact:
     name: Imaginary Bank Engineering
     url: https://github.com/tagoKoder/bank-bff-openapi
@@ -557,6 +557,8 @@ components:
         preferences:
           type: array
           nullable: true
+          maxItems: 1
+          description: "El Proto v1 PatchCustomer admite una preferencia por RPC; enviar como máximo una."
           items:
             type: object
             required: [channel, opt_in]
@@ -652,6 +654,26 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/auth/oidc/callback:
     get:
       tags: [Auth]
@@ -710,6 +732,26 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   # =========================
   # SESSION
   # =========================
@@ -757,6 +799,26 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
       description: "\nLas credenciales y access tokens permanecen en el servidor; las respuestas HTTP no incluyen
         tokens OAuth. Usar Cache-Control: no-store.\n"
 
@@ -813,6 +875,26 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/session/refresh:
     post:
       tags: [Session]
@@ -860,6 +942,26 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
       description: "\nLas credenciales y access tokens permanecen en el servidor; las respuestas HTTP no incluyen
         tokens OAuth. Usar Cache-Control: no-store.\n"
 
@@ -906,6 +1008,26 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
       description: "\nLas credenciales y access tokens permanecen en el servidor; las respuestas HTTP no incluyen
         tokens OAuth. Usar Cache-Control: no-store.\n"
 
@@ -966,6 +1088,26 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/accounts/{id}/limits:
     patch:
       tags: [Accounts]
@@ -1034,6 +1176,26 @@ paths:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/accounts/lookup:
     get:
       tags: [Accounts]
@@ -1102,6 +1264,26 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/accounts/{id}/statement:
     get:
       tags: [Accounts]
@@ -1187,6 +1369,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   # =========================
   # Onboarding
   # =========================
@@ -1246,6 +1448,26 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/onboarding/kyc/confirm:
     post:
       tags: [Onboarding]
@@ -1302,6 +1524,26 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/onboarding/activate:
     post:
       tags: [Onboarding]
@@ -1360,6 +1602,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/payments:
     post:
       tags: [Payments]
@@ -1435,6 +1697,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
   /api/v1/payments/{id}:
     get:
       tags: [Payments]
@@ -1489,6 +1771,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
       description: Obtiene un pago únicamente si el principal autenticado tiene permiso sobre él. Payments 
         verifica titularidad del pago/cuenta; disponer del payment_id no concede acceso. El BFF no devuelve 
         datos de otras personas.
@@ -1563,3 +1865,23 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/ErrorResponse'}
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
+        '504':
+          description: Upstream timeout
+          content:
+            application/json:
+              schema: {'$ref': '#/components/schemas/ErrorResponse'}
